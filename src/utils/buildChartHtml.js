@@ -1,7 +1,9 @@
-import { sourceDataToCode } from "../data/sampleChartParts";
-
 function escapeScriptCloseTag(text) {
   return text.replace(/<\/script>/gi, "<\\/script>");
+}
+
+function sourceDataToCode(sourceData) {
+  return `const source_data = ${JSON.stringify(sourceData, null, 2)};`;
 }
 
 export function buildChartHtml(parts) {

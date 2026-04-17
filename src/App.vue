@@ -3,14 +3,17 @@ import { computed, reactive } from "vue";
 import CodePanel from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
-import { createSampleChartParts, sourceDataToCode } from "./data/sampleChartParts";
-import { samplePanelSpec } from "./specs/samplePanelSpec";
+import {
+  createSampleChartPartsMirroredMood,
+  sourceDataMirroredMoodToCode,
+} from "./data/sampleChartPartsMirroredMood";
+import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
 
-const parts = reactive(createSampleChartParts());
-const panelSpec = reactive(samplePanelSpec);
+const parts = reactive(createSampleChartPartsMirroredMood());
+const panelSpec = reactive(samplePanelSpecMirroredMood);
 
-const sourceDataCode = computed(() => sourceDataToCode(parts.source_data));
+const sourceDataCode = computed(() => sourceDataMirroredMoodToCode(parts.source_data));
 const htmlContent = computed(() => buildChartHtml(parts));
 </script>
 
