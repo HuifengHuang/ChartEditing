@@ -1,6 +1,21 @@
 <script setup>
 import { ref } from "vue";
 
+const props = defineProps({
+  defaultMode: {
+    type: String,
+    default: "auto",
+  },
+  defaultProvider: {
+    type: String,
+    default: "yizhan",
+  },
+  busy: {
+    type: Boolean,
+    default: false,
+  },
+});
+
 const emit = defineEmits(["submit-prompt"]);
 
 const prompt = ref("");
@@ -8,16 +23,20 @@ const prompt = ref("");
 const samplePrompts = [
   "把比例改成 1:1.2",
   "给我几个更柔和的颜色风格",
-  "加一个 2024-01 的数据点",
+  "新增一行数据",
   "图例横着排",
 ];
 
 function submit() {
   const value = prompt.value.trim();
-  if (!value) {
+  if (!value || props.busy) {
     return;
   }
-  emit("submit-prompt", value);
+  emit("submit-prompt", {
+    prompt: value,
+    mode: props.defaultMode,
+    provider: props.defaultProvider,
+  });
 }
 
 function useSample(value) {
@@ -32,13 +51,15 @@ function useSample(value) {
       <input
         v-model="prompt"
         type="text"
-        placeholder="Type an editing intent, e.g. 把比例改成1:1.2 / 图例横着排"
+        placeholder="Type an intent, e.g. 把比例改成1:1.2 / 调整图例"
+        :disabled="busy"
         @keydown.enter.prevent="submit"
       />
-      <button type="button" @click="submit">Run</button>
+      <button type="button" :disabled="busy" @click="submit">{{ busy ? "Running..." : "Run" }}</button>
     </div>
+
     <div class="prompt-samples">
-      <button v-for="item in samplePrompts" :key="item" type="button" @click="useSample(item)">
+      <button v-for="item in samplePrompts" :key="item" type="button" :disabled="busy" @click="useSample(item)">
         {{ item }}
       </button>
     </div>
@@ -74,6 +95,11 @@ button {
   padding: 8px 12px;
   font-size: 13px;
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .prompt-samples {

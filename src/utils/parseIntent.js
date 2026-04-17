@@ -61,12 +61,26 @@ export function parseIntent(prompt) {
   const month = extractMonth(rawPrompt);
   const ratio = extractRatio(rawPrompt);
 
+  const isExpandControls = containsAny(normalized, ["展开控件", "展开面板", "show controls", "expand controls", "more controls"]);
   const isLegend = containsAny(normalized, ["图例", "legend"]);
-  const isRemove = containsAny(normalized, ["删", "删除", "移除", "去掉"]);
-  const isAdd = containsAny(normalized, ["新增", "添加", "加一个", "加一行", "增加"]);
-  const hasDataWord = containsAny(normalized, ["数据", "月份", "month", "行"]);
-  const isAspect = containsAny(normalized, ["比例", "尺寸", "变高", "拉宽", "变宽", "高一点", "宽一点"]);
-  const isColorTheme = containsAny(normalized, ["颜色", "配色", "色调", "风格", "主题"]);
+  const isRemove = containsAny(normalized, ["删", "删除", "移除", "去掉", "remove"]);
+  const isAdd = containsAny(normalized, ["新增", "添加", "加一个", "加一行", "增加", "add"]);
+  const hasDataWord = containsAny(normalized, ["数据", "月份", "month", "行", "row"]);
+  const isAspect = containsAny(normalized, ["比例", "尺寸", "变高", "拉宽", "变宽", "高一点", "宽一点", "aspect ratio"]);
+  const isColorTheme = containsAny(normalized, ["颜色", "配色", "色调", "风格", "主题", "theme"]);
+
+  if (isExpandControls) {
+    return {
+      intentId: createIntentId(),
+      intentType: "style",
+      task: "expand_controls",
+      target: ["controls"],
+      action: "expand_panel",
+      parameters: {},
+      needPanel: true,
+      panelStrategy: "extend",
+    };
+  }
 
   if (isLegend) {
     const direction = containsAny(normalized, ["横", "横着", "水平", "horizontal"])
@@ -74,7 +88,7 @@ export function parseIntent(prompt) {
       : containsAny(normalized, ["竖", "纵", "vertical"])
         ? "vertical"
         : undefined;
-    const fontBigger = containsAny(normalized, ["字体调大", "字体变大", "字大", "调大"]);
+    const fontBigger = containsAny(normalized, ["字体调大", "字体变大", "字大", "调大", "bigger font"]);
     const editItems = containsAny(normalized, ["单独", "每个图例项", "图例项", "item"]);
 
     return {
@@ -130,10 +144,10 @@ export function parseIntent(prompt) {
   }
 
   if (isAspect) {
-    const isDetailed = containsAny(normalized, ["详细", "微调", "细一点"]);
-    const sizeHint = containsAny(normalized, ["拉宽", "变宽", "宽一点"])
+    const isDetailed = containsAny(normalized, ["详细", "微调", "细一点", "detail"]);
+    const sizeHint = containsAny(normalized, ["拉宽", "变宽", "宽一点", "wider"])
       ? "wider"
-      : containsAny(normalized, ["变高", "高一点"])
+      : containsAny(normalized, ["变高", "高一点", "taller"])
         ? "taller"
         : undefined;
 

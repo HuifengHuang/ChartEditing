@@ -10,9 +10,11 @@ import {
 } from "./data/sampleChartPartsMirroredMood";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
-import { parseIntent } from "./utils/parseIntent";
+import { parseIntent as parseIntentByRule } from "./utils/parseIntent";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
 import { applyUpdatePlan } from "./utils/applyUpdatePlan";
+import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
+import { llmConfig } from "./config/llmConfig.js";
 
 const parts = ref(createSampleChartPartsMirroredMood());
 
@@ -29,17 +31,85 @@ function createEmptyPanelSpec() {
 const panelSpec = ref(createEmptyPanelSpec());
 
 const lastIntent = ref(null);
+const busy = ref(false);
+const notice = ref("");
+const errorMessage = ref("");
 
 const sourceDataCode = computed(() => sourceDataMirroredMoodToCode(parts.value.source_data));
 const htmlContent = computed(() => buildChartHtml(parts.value));
 
-function handlePromptSubmit(prompt) {
-  const intent = parseIntent(prompt);
-  const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
-  const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
-  parts.value = nextState.parts;
-  panelSpec.value = nextState.panelSpec;
-  lastIntent.value = intent;
+function buildIntentContext() {
+  return {
+    chartType: "mirrored horizontal bar chart",
+    fields: ["month", "waitingArea", "corridor"],
+    supportedTasks: [
+      "aspect_ratio",
+      "color_theme",
+      "add_element",
+      "remove_element",
+      "legend_edit",
+      "expand_controls",
+    ],
+  };
+}
+
+async function resolveIntent({ prompt, mode, provider }) {
+  if (mode === "rule") {
+    return parseIntentByRule(prompt);
+  }
+
+  if (mode === "llm") {
+    return parseIntentWithLLM({
+      prompt,
+      context: buildIntentContext(),
+      provider,
+    });
+  }
+
+  try {
+    const intent = await parseIntentWithLLM({
+      prompt,
+      context: buildIntentContext(),
+      provider,
+    });
+    notice.value = "LLM parser succeeded.";
+    return intent;
+  } catch (error) {
+    notice.value = "LLM failed, fallback to rule parser.";
+    return parseIntentByRule(prompt);
+  }
+}
+
+async function handlePromptSubmit(payload) {
+  if (busy.value) {
+    return;
+  }
+
+  const input = typeof payload === "string" ? { prompt: payload } : payload || {};
+  const prompt = String(input.prompt || "").trim();
+  if (!prompt) {
+    return;
+  }
+
+  const mode = input.mode || llmConfig.mode;
+  const provider = input.provider || llmConfig.provider;
+
+  busy.value = true;
+  notice.value = "";
+  errorMessage.value = "";
+
+  try {
+    const intent = await resolveIntent({ prompt, mode, provider });
+    const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
+    const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
+    parts.value = nextState.parts;
+    panelSpec.value = nextState.panelSpec;
+    lastIntent.value = intent;
+  } catch (error) {
+    errorMessage.value = error?.message || "Intent parsing failed.";
+  } finally {
+    busy.value = false;
+  }
 }
 </script>
 
@@ -50,7 +120,16 @@ function handlePromptSubmit(prompt) {
       <p>Prompt -> Intent -> UpdatePlan -> source_data/panelSpec -> live preview</p>
     </header>
 
-    <PromptBar @submit-prompt="handlePromptSubmit" />
+    <PromptBar
+      :default-mode="llmConfig.mode"
+      :default-provider="llmConfig.provider"
+      :busy="busy"
+      @submit-prompt="handlePromptSubmit"
+    />
+
+    <div v-if="notice" class="notice notice-info">{{ notice }}</div>
+    <div v-if="errorMessage" class="notice notice-error">{{ errorMessage }}</div>
+
     <div v-if="lastIntent" class="intent-status">
       Last Intent: <strong>{{ lastIntent.task }}</strong>
       <span>({{ lastIntent.action }})</span>
@@ -97,6 +176,25 @@ function handlePromptSubmit(prompt) {
 .workbench-header p {
   margin: 4px 0 0;
   color: #d1d5db;
+}
+
+.notice {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.notice-info {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.notice-error {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .intent-status {

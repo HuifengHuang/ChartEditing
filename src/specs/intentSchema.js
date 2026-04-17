@@ -2,7 +2,7 @@
  * @typedef {Object} IntentSpec
  * @property {string} intentId
  * @property {"style" | "data"} intentType
- * @property {"aspect_ratio" | "color_theme" | "add_element" | "remove_element" | "legend_edit"} task
+ * @property {"aspect_ratio" | "color_theme" | "add_element" | "remove_element" | "legend_edit" | "expand_controls"} task
  * @property {string[]} target
  * @property {"update" | "add" | "remove" | "expand_panel" | "show_panel"} action
  * @property {Record<string, any>} parameters
@@ -42,6 +42,7 @@ export const SUPPORTED_INTENT_TASKS = [
   "add_element",
   "remove_element",
   "legend_edit",
+  "expand_controls",
 ];
 
 export function createDefaultIntentSpec() {

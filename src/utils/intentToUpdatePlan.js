@@ -217,5 +217,12 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
     return plan;
   }
 
+  if (intentSpec.task === "expand_controls") {
+    plan.panelUpdates.push({ type: "expand-section", sectionId: "layout_detail" });
+    plan.panelUpdates.push({ type: "expand-section", sectionId: "theme_detail" });
+    plan.panelUpdates.push({ type: "expand-section", sectionId: "legend_detail" });
+    return plan;
+  }
+
   return plan;
 }

@@ -427,6 +427,23 @@ const TASK_SECTION_REGISTRY = {
       },
     ],
   },
+  expand_controls: {
+    primarySectionId: "layout_primary",
+    sections: [
+      {
+        sectionId: "layout_primary",
+        title: "Layout",
+        priority: "primary",
+        controls: [CONTROL_TEMPLATES.aspect_ratio],
+      },
+      {
+        sectionId: "layout_detail",
+        title: "Layout Detail",
+        priority: "detail",
+        controls: [],
+      },
+    ],
+  },
 };
 
 const AFFECTED_CONTROL_REGISTRY = {
