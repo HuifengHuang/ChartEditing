@@ -1,99 +1,152 @@
 <script setup>
+import { computed, ref, watch } from "vue";
+import ControlRenderer from "./ControlRenderer.vue";
+import { addItemToCollection, removeItemFromCollection } from "../utils/collectionUtils";
+import { setValueByPath } from "../utils/pathUtils";
+import { getUnsupportedControlKeySet, validatePanelSpec } from "../utils/panelSpecValidator";
+
 const props = defineProps({
-  sourceData: {
+  panelSpec: {
+    type: Object,
+    required: true,
+  },
+  parts: {
     type: Object,
     required: true,
   },
 });
 
-const emit = defineEmits(["update:source-data"]);
+const expandedDetailSections = ref(new Set());
 
-function updateField(field, value) {
-  emit("update:source-data", {
-    ...props.sourceData,
-    [field]: value,
+const validationResult = computed(() => validatePanelSpec(props.panelSpec));
+const unsupportedControlKeys = computed(() => getUnsupportedControlKeySet(validationResult.value.issues));
+const sectionMap = computed(() => {
+  const map = new Map();
+  (props.panelSpec.sections || []).forEach((section) => {
+    map.set(section.sectionId, section);
+  });
+  return map;
+});
+
+watch(
+  validationResult,
+  (result) => {
+    if (!result.issues.length) {
+      return;
+    }
+    result.issues.forEach((issue) => {
+      const location = [issue.sectionId, issue.controlId].filter(Boolean).join(" / ");
+      const prefix = location ? `[PanelSpec] ${location}:` : "[PanelSpec]";
+      if (issue.level === "error") {
+        console.warn(`${prefix} ${issue.message}`);
+      } else {
+        console.warn(`${prefix} ${issue.message}`);
+      }
+    });
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.panelSpec.sections,
+  (sections) => {
+    const defaultExpanded = new Set();
+    (sections || []).forEach((section) => {
+      (section.controls || []).forEach((control) => {
+        if (control.expandable && control.expandedByDefault && control.detailSectionRef) {
+          defaultExpanded.add(control.detailSectionRef);
+        }
+      });
+    });
+    expandedDetailSections.value = defaultExpanded;
+  },
+  { immediate: true }
+);
+
+const visibleSections = computed(() =>
+  (props.panelSpec.sections || []).filter((section) => {
+    if (section.priority !== "detail") {
+      return true;
+    }
+    return expandedDetailSections.value.has(section.sectionId);
+  })
+);
+
+function applyPatch(patch) {
+  if (!patch || typeof patch !== "object") {
+    return;
+  }
+
+  Object.entries(patch).forEach(([path, value]) => {
+    setValueByPath(props.parts, path, value);
   });
 }
 
-function onNumberInput(field, rawValue) {
-  const parsed = Number(rawValue);
-  if (!Number.isNaN(parsed)) {
-    updateField(field, parsed);
+function onAddItem(payload) {
+  if (!payload?.targetCollection) {
+    return;
   }
+  addItemToCollection(props.parts, payload.targetCollection, payload.item || {});
+}
+
+function onRemoveItem(payload) {
+  if (!payload?.targetCollection) {
+    return;
+  }
+  removeItemFromCollection(props.parts, payload.targetCollection, payload.matcher);
+}
+
+function toggleDetailSection(sectionId) {
+  if (!sectionMap.value.has(sectionId)) {
+    return;
+  }
+  const next = new Set(expandedDetailSections.value);
+  if (next.has(sectionId)) {
+    next.delete(sectionId);
+  } else {
+    next.add(sectionId);
+  }
+  expandedDetailSections.value = next;
+}
+
+function isUnsupported(sectionId, controlId) {
+  return unsupportedControlKeys.value.has(`${sectionId}::${controlId}`);
 }
 </script>
 
 <template>
   <section class="control-panel panel">
     <header class="panel-header">
-      <h2>Control Panel</h2>
-      <p>Static panel with room for future schema expansion</p>
+      <h2>{{ panelSpec.title }}</h2>
+      <p>{{ panelSpec.description }}</p>
     </header>
 
-    <div class="form-grid">
-      <label>
-        <span>Chart Width</span>
-        <input
-          type="number"
-          min="300"
-          max="1200"
-          step="10"
-          :value="sourceData.chartWidth"
-          @input="onNumberInput('chartWidth', $event.target.value)"
-        />
-      </label>
+    <div v-if="!validationResult.isValid" class="fallback-warning">
+      PanelSpec has invalid fields. Unsupported controls are skipped safely.
+    </div>
 
-      <label>
-        <span>Chart Height</span>
-        <input
-          type="number"
-          min="240"
-          max="900"
-          step="10"
-          :value="sourceData.chartHeight"
-          @input="onNumberInput('chartHeight', $event.target.value)"
-        />
-      </label>
+    <div class="section-list">
+      <section v-for="section in visibleSections" :key="section.sectionId" class="spec-section">
+        <header class="section-header">
+          <h3>{{ section.title }}</h3>
+          <p v-if="section.description">{{ section.description }}</p>
+        </header>
 
-      <label>
-        <span>Bar Color</span>
-        <input type="color" :value="sourceData.barColor" @input="updateField('barColor', $event.target.value)" />
-      </label>
-
-      <label>
-        <span>Bar Gap (0-0.9)</span>
-        <input
-          type="range"
-          min="0"
-          max="0.9"
-          step="0.05"
-          :value="sourceData.barGap"
-          @input="onNumberInput('barGap', $event.target.value)"
-        />
-        <small>{{ sourceData.barGap.toFixed(2) }}</small>
-      </label>
-
-      <label>
-        <span>Title Font Size</span>
-        <input
-          type="number"
-          min="12"
-          max="48"
-          step="1"
-          :value="sourceData.titleFontSize"
-          @input="onNumberInput('titleFontSize', $event.target.value)"
-        />
-      </label>
-
-      <label>
-        <span>Title Text</span>
-        <input
-          type="text"
-          :value="sourceData.titleText"
-          @input="updateField('titleText', $event.target.value)"
-          placeholder="Input chart title"
-        />
-      </label>
+        <div class="controls-list">
+          <ControlRenderer
+            v-for="control in section.controls"
+            :key="control.id"
+            :control="control"
+            :parts="parts"
+            :is-unsupported="isUnsupported(section.sectionId, control.id)"
+            :is-detail-expanded="Boolean(control.detailSectionRef && expandedDetailSections.has(control.detailSectionRef))"
+            @apply-patch="applyPatch"
+            @add-item="onAddItem"
+            @remove-item="onRemoveItem"
+            @toggle-detail="toggleDetailSection"
+          />
+        </div>
+      </section>
     </div>
   </section>
 </template>
@@ -119,42 +172,44 @@ function onNumberInput(field, rawValue) {
   font-size: 13px;
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-top: 14px;
+.fallback-warning {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
 }
 
-label {
+.section-list {
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
-span {
-  font-size: 13px;
-  color: #374151;
+.spec-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
 }
 
-input {
-  width: 100%;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 8px 10px;
+.section-header h3 {
+  margin: 0;
   font-size: 14px;
 }
 
-input[type="color"] {
-  padding: 4px;
-  height: 38px;
-}
-
-input[type="range"] {
-  padding: 0;
-}
-
-small {
+.section-header p {
+  margin: 2px 0 0;
+  font-size: 12px;
   color: #6b7280;
+}
+
+.controls-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

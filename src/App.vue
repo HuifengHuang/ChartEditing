@@ -4,16 +4,14 @@ import CodePanel from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
 import { createSampleChartParts, sourceDataToCode } from "./data/sampleChartParts";
+import { samplePanelSpec } from "./specs/samplePanelSpec";
 import { buildChartHtml } from "./utils/buildChartHtml";
 
 const parts = reactive(createSampleChartParts());
+const panelSpec = reactive(samplePanelSpec);
 
 const sourceDataCode = computed(() => sourceDataToCode(parts.source_data));
 const htmlContent = computed(() => buildChartHtml(parts));
-
-function updateSourceData(nextSourceData) {
-  parts.source_data = nextSourceData;
-}
 </script>
 
 <template>
@@ -33,7 +31,7 @@ function updateSourceData(nextSourceData) {
       </div>
 
       <div class="right-column">
-        <ControlPanel :source-data="parts.source_data" @update:source-data="updateSourceData" />
+        <ControlPanel :parts="parts" :panel-spec="panelSpec" />
       </div>
     </section>
   </main>
