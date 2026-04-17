@@ -48,8 +48,8 @@ watch(
 );
 
 watch(
-  () => props.panelSpec.sections,
-  (sections) => {
+  () => [props.panelSpec.sections, props.panelSpec.uiState?.expandedSections],
+  ([sections, expandedSections]) => {
     const defaultExpanded = new Set();
     (sections || []).forEach((section) => {
       (section.controls || []).forEach((control) => {
@@ -57,6 +57,11 @@ watch(
           defaultExpanded.add(control.detailSectionRef);
         }
       });
+    });
+    (expandedSections || []).forEach((sectionId) => {
+      if (sectionMap.value.has(sectionId)) {
+        defaultExpanded.add(sectionId);
+      }
     });
     expandedDetailSections.value = defaultExpanded;
   },
@@ -112,6 +117,10 @@ function toggleDetailSection(sectionId) {
 function isUnsupported(sectionId, controlId) {
   return unsupportedControlKeys.value.has(`${sectionId}::${controlId}`);
 }
+
+function isHighlighted(sectionId) {
+  return props.panelSpec?.uiState?.highlightedSectionId === sectionId;
+}
 </script>
 
 <template>
@@ -126,7 +135,12 @@ function isUnsupported(sectionId, controlId) {
     </div>
 
     <div class="section-list">
-      <section v-for="section in visibleSections" :key="section.sectionId" class="spec-section">
+      <section
+        v-for="section in visibleSections"
+        :key="section.sectionId"
+        class="spec-section"
+        :class="{ highlighted: isHighlighted(section.sectionId) }"
+      >
         <header class="section-header">
           <h3>{{ section.title }}</h3>
           <p v-if="section.description">{{ section.description }}</p>
@@ -193,6 +207,11 @@ function isUnsupported(sectionId, controlId) {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 10px;
+}
+
+.spec-section.highlighted {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .section-header h3 {

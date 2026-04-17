@@ -1,4 +1,4 @@
-import { getValueByPath, setValueByPath } from "./pathUtils";
+import { getValueByPath, setValueByPath } from "./pathUtils.js";
 
 export function getCollectionByPath(sourceDataWrapper, targetCollection) {
   const value = getValueByPath(sourceDataWrapper, targetCollection);

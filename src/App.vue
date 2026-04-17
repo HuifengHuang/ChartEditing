@@ -1,28 +1,60 @@
 <script setup>
-import { computed, reactive } from "vue";
+import { computed, ref } from "vue";
 import CodePanel from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
+import PromptBar from "./components/PromptBar.vue";
 import {
   createSampleChartPartsMirroredMood,
   sourceDataMirroredMoodToCode,
 } from "./data/sampleChartPartsMirroredMood";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
+import { parseIntent } from "./utils/parseIntent";
+import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
+import { applyUpdatePlan } from "./utils/applyUpdatePlan";
 
-const parts = reactive(createSampleChartPartsMirroredMood());
-const panelSpec = reactive(samplePanelSpecMirroredMood);
+const parts = ref(createSampleChartPartsMirroredMood());
 
-const sourceDataCode = computed(() => sourceDataMirroredMoodToCode(parts.source_data));
-const htmlContent = computed(() => buildChartHtml(parts));
+function createEmptyPanelSpec() {
+  const base = structuredClone(samplePanelSpecMirroredMood);
+  base.sections = [];
+  base.uiState = {
+    expandedSections: [],
+    highlightedSectionId: null,
+  };
+  return base;
+}
+
+const panelSpec = ref(createEmptyPanelSpec());
+
+const lastIntent = ref(null);
+
+const sourceDataCode = computed(() => sourceDataMirroredMoodToCode(parts.value.source_data));
+const htmlContent = computed(() => buildChartHtml(parts.value));
+
+function handlePromptSubmit(prompt) {
+  const intent = parseIntent(prompt);
+  const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
+  const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
+  parts.value = nextState.parts;
+  panelSpec.value = nextState.panelSpec;
+  lastIntent.value = intent;
+}
 </script>
 
 <template>
   <main class="workbench">
     <header class="workbench-header">
       <h1>Chart Editing Workbench</h1>
-      <p>Structured code view + source_data controls + live preview</p>
+      <p>Prompt -> Intent -> UpdatePlan -> source_data/panelSpec -> live preview</p>
     </header>
+
+    <PromptBar @submit-prompt="handlePromptSubmit" />
+    <div v-if="lastIntent" class="intent-status">
+      Last Intent: <strong>{{ lastIntent.task }}</strong>
+      <span>({{ lastIntent.action }})</span>
+    </div>
 
     <section class="workbench-grid">
       <div class="left-column">
@@ -54,7 +86,7 @@ const htmlContent = computed(() => buildChartHtml(parts));
   color: #f9fafb;
   border-radius: 12px;
   padding: 14px 16px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .workbench-header h1 {
@@ -65,6 +97,16 @@ const htmlContent = computed(() => buildChartHtml(parts));
 .workbench-header p {
   margin: 4px 0 0;
   color: #d1d5db;
+}
+
+.intent-status {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #1e3a8a;
 }
 
 .workbench-grid {
@@ -87,15 +129,14 @@ const htmlContent = computed(() => buildChartHtml(parts));
 }
 
 @media (max-width: 1280px) {
+  .workbench {
+    overflow: auto;
+  }
+
   .workbench-grid {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(3, minmax(0, 1fr));
-  }
-
-  .left-column,
-  .center-column,
-  .right-column {
-    min-height: 0;
+    min-height: 900px;
   }
 }
 </style>
