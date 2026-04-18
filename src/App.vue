@@ -38,6 +38,13 @@ const sourceDataCode = computed(() => sourceDataMirroredMoodToCode(parts.value.s
 const htmlContent = computed(() => buildChartHtml(parts.value));
 
 function buildIntentContext() {
+  const sections = panelSpec.value?.sections || [];
+  const sectionSummary = sections.map((section) => ({
+    sectionId: section.sectionId,
+    priority: section.priority,
+    controlIds: (section.controls || []).map((control) => control.id),
+  }));
+
   return {
     chartType: "mirrored horizontal bar chart",
     fields: ["month", "waitingArea", "corridor"],
@@ -49,6 +56,12 @@ function buildIntentContext() {
       "legend_edit",
       "expand_controls",
     ],
+    panelSummary: {
+      sectionCount: sections.length,
+      sections: sectionSummary,
+      expandedSections: panelSpec.value?.uiState?.expandedSections || [],
+      highlightedSectionId: panelSpec.value?.uiState?.highlightedSectionId || null,
+    },
   };
 }
 

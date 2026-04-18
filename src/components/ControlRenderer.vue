@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { getCollectionByPath } from "../utils/collectionUtils";
-import { getValueByPath } from "../utils/pathUtils";
+import { ensureCollectionByPath, getCollectionByPath } from "../utils/collectionUtils";
+import { getValueByPath, setValueByPath } from "../utils/pathUtils";
 
 const props = defineProps({
   control: {
@@ -39,6 +39,9 @@ const isVisible = computed(() => {
 const collection = computed(() => {
   if (!props.control.targetCollection) {
     return [];
+  }
+  if (props.control.controlType === "table") {
+    return ensureCollectionByPath(props.parts, props.control.targetCollection);
   }
   return getCollectionByPath(props.parts, props.control.targetCollection);
 });
@@ -237,15 +240,36 @@ function onRemoveAction() {
 }
 
 function inferAutoSchema(rows) {
+  const colorHexPattern = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+  function detectValueType(value) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return "number";
+    }
+    if (typeof value === "boolean") {
+      return "boolean";
+    }
+    if (typeof value === "string" && colorHexPattern.test(value.trim())) {
+      return "color";
+    }
+    return "string";
+  }
+
   const keys = new Set();
+  const sampleTypeByKey = new Map();
   rows.forEach((item) => {
-    Object.keys(item || {}).forEach((key) => keys.add(key));
+    Object.keys(item || {}).forEach((key) => {
+      keys.add(key);
+      if (!sampleTypeByKey.has(key)) {
+        sampleTypeByKey.set(key, detectValueType(item?.[key]));
+      }
+    });
   });
 
   return Array.from(keys).map((key) => ({
     key,
     label: key,
-    valueType: "string",
+    valueType: sampleTypeByKey.get(key) || "string",
     editable: true,
     hidden: false,
   }));
@@ -314,6 +338,24 @@ const tableOrientation = computed(() => {
 
   return "row-major";
 });
+
+watch(
+  () => [props.control.controlType, props.control.tableOrientation, props.control.orientationKey],
+  () => {
+    if (props.control.controlType !== "table") {
+      return;
+    }
+    if (props.control.tableOrientation !== "auto" || !props.control.orientationKey) {
+      return;
+    }
+    const current = getValueByPath(props.parts, props.control.orientationKey);
+    if (current === "row-major" || current === "column-major") {
+      return;
+    }
+    setValueByPath(props.parts, props.control.orientationKey, "row-major");
+  },
+  { immediate: true }
+);
 
 function normalizeTableCellValue(rawValue, column) {
   return normalizeInputValue(rawValue, column.valueType, column.valueType);

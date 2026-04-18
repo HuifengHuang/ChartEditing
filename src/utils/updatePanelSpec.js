@@ -1,4 +1,4 @@
-import { getAffectedControlConfig, getTaskSections } from "../specs/taskControlRegistry.js";
+import { getAffectedControlConfig, getSectionTemplateById, getTaskSections } from "../specs/taskControlRegistry.js";
 
 function ensureUiState(panelSpec) {
   if (!panelSpec.uiState || typeof panelSpec.uiState !== "object") {
@@ -121,6 +121,12 @@ export function updatePanelSpec(currentPanelSpec, panelUpdates) {
     if (update.type === "expand-section") {
       if (!update.sectionId) {
         return;
+      }
+      if (!findSection(nextPanelSpec, update.sectionId)) {
+        const template = getSectionTemplateById(update.sectionId);
+        if (template) {
+          ensureSection(nextPanelSpec, template);
+        }
       }
       const set = new Set(nextPanelSpec.uiState.expandedSections);
       set.add(update.sectionId);

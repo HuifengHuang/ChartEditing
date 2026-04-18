@@ -5,14 +5,17 @@ export function getCollectionByPath(sourceDataWrapper, targetCollection) {
   return Array.isArray(value) ? value : [];
 }
 
-export function addItemToCollection(sourceDataWrapper, targetCollection, item) {
-  const collection = getValueByPath(sourceDataWrapper, targetCollection);
-
-  if (!Array.isArray(collection)) {
-    setValueByPath(sourceDataWrapper, targetCollection, []);
+export function ensureCollectionByPath(sourceDataWrapper, targetCollection) {
+  const value = getValueByPath(sourceDataWrapper, targetCollection);
+  if (Array.isArray(value)) {
+    return value;
   }
+  setValueByPath(sourceDataWrapper, targetCollection, []);
+  return getValueByPath(sourceDataWrapper, targetCollection);
+}
 
-  const nextCollection = getValueByPath(sourceDataWrapper, targetCollection);
+export function addItemToCollection(sourceDataWrapper, targetCollection, item) {
+  const nextCollection = ensureCollectionByPath(sourceDataWrapper, targetCollection);
   nextCollection.push(item);
   return nextCollection;
 }

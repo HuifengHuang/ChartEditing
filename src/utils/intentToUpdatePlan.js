@@ -1,7 +1,61 @@
-import { getTaskPrimarySectionId } from "../specs/taskControlRegistry.js";
+import {
+  getTaskDetailSectionIds,
+  getTaskPrimarySectionId,
+  getTasksByTarget,
+} from "../specs/taskControlRegistry.js";
 
 function hasSection(panelSpec, sectionId) {
   return (panelSpec?.sections || []).some((section) => section.sectionId === sectionId);
+}
+
+function uniq(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function ensureTaskPanel(plan, currentPanelSpec, task, { highlight = true } = {}) {
+  const sectionId = getTaskPrimarySectionId(task);
+  if (hasSection(currentPanelSpec, sectionId)) {
+    plan.panelUpdates.push({ type: "ensure-task-controls", task });
+  } else {
+    plan.panelUpdates.push({ type: "create-section-with-controls", task });
+  }
+  if (highlight) {
+    plan.panelUpdates.push({ type: "highlight-section", sectionId });
+  }
+}
+
+function expandTaskDetails(plan, task) {
+  const detailSectionIds = getTaskDetailSectionIds(task);
+  detailSectionIds.forEach((sectionId) => {
+    plan.panelUpdates.push({ type: "expand-section", sectionId });
+  });
+}
+
+function resolveExpandTasks(intentSpec, currentPanelSpec) {
+  const targets = Array.isArray(intentSpec?.target) ? intentSpec.target : [];
+  const fromTarget = uniq(
+    targets.flatMap((target) => getTasksByTarget(String(target)))
+  );
+
+  if (fromTarget.length && !targets.includes("controls")) {
+    return fromTarget;
+  }
+
+  const defaultTasks = ["aspect_ratio", "color_theme", "legend_edit"];
+  const existingTasks = defaultTasks.filter((task) => hasSection(currentPanelSpec, getTaskPrimarySectionId(task)));
+  return existingTasks.length ? existingTasks : defaultTasks;
+}
+
+function ensureTableOrientationUpdate(plan, currentParts) {
+  const orientation = currentParts?.source_data?.meta?.tableOrientation;
+  if (orientation === "row-major" || orientation === "column-major") {
+    return;
+  }
+  plan.sourceDataUpdates.push({
+    type: "set",
+    path: "source_data.meta.tableOrientation",
+    value: "row-major",
+  });
 }
 
 function clamp(value, min, max) {
@@ -126,40 +180,35 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
     panelUpdates: [],
   };
 
-  const sectionId = getTaskPrimarySectionId(intentSpec.task);
-  if (hasSection(currentPanelSpec, sectionId)) {
-    plan.panelUpdates.push({ type: "ensure-task-controls", task: intentSpec.task });
-    plan.panelUpdates.push({ type: "highlight-section", sectionId });
-  } else {
-    plan.panelUpdates.push({
-      type: "create-section-with-controls",
-      task: intentSpec.task,
-    });
-    plan.panelUpdates.push({ type: "highlight-section", sectionId });
-  }
-
   if (intentSpec.task === "aspect_ratio") {
+    ensureTaskPanel(plan, currentPanelSpec, "aspect_ratio");
     if (intentSpec.parameters?.aspectRatio || intentSpec.parameters?.sizeHint) {
       plan.sourceDataUpdates.push(...computeAspectRatioUpdates(intentSpec.parameters, currentParts));
     }
-    if (intentSpec.parameters?.detail || !intentSpec.parameters?.aspectRatio) {
-      plan.panelUpdates.push({ type: "expand-section", sectionId: "layout_detail" });
+    if (intentSpec.parameters?.detail || intentSpec.panelStrategy === "extend") {
+      expandTaskDetails(plan, "aspect_ratio");
     }
     return plan;
   }
 
   if (intentSpec.task === "color_theme") {
-    const patch = createThemePatchByHint(intentSpec.parameters?.themeHint);
+    ensureTaskPanel(plan, currentPanelSpec, "color_theme");
+    const patch =
+      intentSpec.parameters?.applyPreset === true
+        ? createThemePatchByHint(intentSpec.parameters?.themeHint)
+        : null;
     if (patch) {
       plan.sourceDataUpdates.push({ type: "patch", patch });
     }
-    if (intentSpec.parameters?.detail) {
-      plan.panelUpdates.push({ type: "expand-section", sectionId: "theme_detail" });
+    if (intentSpec.parameters?.detail || intentSpec.panelStrategy === "extend") {
+      expandTaskDetails(plan, "color_theme");
     }
     return plan;
   }
 
   if (intentSpec.task === "add_element") {
+    ensureTaskPanel(plan, currentPanelSpec, "add_element");
+    ensureTableOrientationUpdate(plan, currentParts);
     if (intentSpec.parameters?.month) {
       plan.sourceDataUpdates.push({
         type: "add",
@@ -175,6 +224,8 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
   }
 
   if (intentSpec.task === "remove_element") {
+    ensureTaskPanel(plan, currentPanelSpec, "remove_element");
+    ensureTableOrientationUpdate(plan, currentParts);
     if (intentSpec.parameters?.month) {
       plan.sourceDataUpdates.push({
         type: "remove",
@@ -193,6 +244,7 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
   }
 
   if (intentSpec.task === "legend_edit") {
+    ensureTaskPanel(plan, currentPanelSpec, "legend_edit");
     if (intentSpec.parameters?.direction) {
       plan.sourceDataUpdates.push({
         type: "set",
@@ -210,19 +262,25 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
       });
     }
 
-    if (intentSpec.parameters?.editItems) {
-      plan.panelUpdates.push({ type: "expand-section", sectionId: "legend_detail" });
+    if (intentSpec.parameters?.editItems || intentSpec.parameters?.detail || intentSpec.panelStrategy === "extend") {
+      expandTaskDetails(plan, "legend_edit");
     }
 
     return plan;
   }
 
   if (intentSpec.task === "expand_controls") {
-    plan.panelUpdates.push({ type: "expand-section", sectionId: "layout_detail" });
-    plan.panelUpdates.push({ type: "expand-section", sectionId: "theme_detail" });
-    plan.panelUpdates.push({ type: "expand-section", sectionId: "legend_detail" });
+    const tasks = resolveExpandTasks(intentSpec, currentPanelSpec);
+    tasks.forEach((task, index) => {
+      ensureTaskPanel(plan, currentPanelSpec, task, { highlight: index === 0 });
+      expandTaskDetails(plan, task);
+      if (task === "add_element" || task === "remove_element") {
+        ensureTableOrientationUpdate(plan, currentParts);
+      }
+    });
     return plan;
   }
 
+  ensureTaskPanel(plan, currentPanelSpec, intentSpec.task);
   return plan;
 }

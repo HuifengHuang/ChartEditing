@@ -66,6 +66,8 @@
    - `parseIntentResponse(raw_text)` 提取 JSON
    - `validateIntentSpec(...)` 校验并兜底
 
+说明：当前仍是 text-only 意图解析工作流，不做图片上传或图像参与解析。
+
 配置文件：`src/config/llmConfig.js`
 
 - `endpoint`：`VITE_INTENT_PROXY_ENDPOINT`（默认 `/api/intent-parse`）
@@ -117,10 +119,11 @@
 1. 先根据任务确保 primary section 存在（不存在就创建）。
 2. 再按任务追加数据更新：
    - 比例任务：更新 width/height 等布局参数
-   - 主题任务：批量 patch 颜色
+   - 主题任务：默认 panel-first；仅在明确 `themeHint` 且 `applyPreset=true` 时才自动 patch 主题
    - 增删数据：操作 `source_data.data`
    - 图例任务：更新方向、字号等
 3. 按需触发 detail section 展开（如 `layout_detail`、`theme_detail`、`legend_detail`）。
+4. `expand_controls` 会优先根据 `target` 展开相关 detail section，而不是泛化地全部展开。
 
 ## 7. UpdatePlan 执行
 
@@ -146,13 +149,16 @@
 机制说明：
 
 1. `taskControlRegistry` 维护“任务 -> section/controls”映射。
-2. `updatePanelSpec` 根据 `panelUpdates` 执行：
+2. 同时维护轻量 task->detail 与 target->task 映射，用于精准展开 detail section。
+3. `updatePanelSpec` 根据 `panelUpdates` 执行：
    - 创建/确保任务控件
    - section 高亮
    - section 展开
    - 插入受影响控件（affected bindings）
-3. `ControlPanel` 根据 `panelSpec` 渲染可见 section。
-4. `ControlRenderer` 根据控件类型渲染输入器（number/select/toggle/table 等），并将用户操作实时写回 `parts`。
+4. `expand-section` 在 section 尚未创建时会自动补模板后再展开。
+5. `ControlPanel` 根据 `panelSpec` 渲染可见 section。
+6. `ControlRenderer` 根据控件类型渲染输入器（number/select/toggle/table 等），并将用户操作实时写回 `parts`。
+7. `table` 控件优先从 `targetCollection` 自动推断列（支持 `schemaSource` 覆写），并支持 `orientationKey`（`row-major`/`column-major`）；缺失时会补默认 `row-major`。
 
 结论：即使初始 `panelSpec.sections = []`，只要收到有效意图，也会通过 `create-section-with-controls / ensure-task-controls` 动态生成右侧控件。
 
@@ -178,4 +184,3 @@ PromptBar.submit
     -> parts/panelSpec reactive update
       -> CodePanel / ChartPreview / ControlPanel rerender
 ```
-

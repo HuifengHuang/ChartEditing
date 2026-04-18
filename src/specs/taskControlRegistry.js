@@ -54,6 +54,8 @@ function createControlTemplates() {
         "source_data.layout.svgHeight",
         "source_data.layout.chartTop",
         "source_data.layout.chartBottom",
+        "source_data.layout.barHeight",
+        "source_data.layout.labelGap",
       ],
       impactDescription: "Shows width/height/top/bottom controls for fine tuning.",
     },
@@ -96,6 +98,26 @@ function createControlTemplates() {
       bind: "source_data.layout.chartBottom",
       valueType: "number",
       range: { min: 100, max: 900, step: 1 },
+    },
+    bar_height: {
+      id: "bar_height",
+      label: "Bar Height",
+      controlType: "slider",
+      operationType: "update",
+      bindingMode: "single",
+      bind: "source_data.layout.barHeight",
+      valueType: "number",
+      range: { min: 6, max: 40, step: 1 },
+    },
+    label_gap: {
+      id: "label_gap",
+      label: "Center Label Gap",
+      controlType: "slider",
+      operationType: "update",
+      bindingMode: "single",
+      bind: "source_data.layout.labelGap",
+      valueType: "number",
+      range: { min: 18, max: 180, step: 1 },
     },
     color_theme: {
       id: "color_theme",
@@ -471,6 +493,18 @@ const AFFECTED_CONTROL_REGISTRY = {
     priority: "detail",
     control: CONTROL_TEMPLATES.chart_bottom,
   },
+  "source_data.layout.barHeight": {
+    sectionId: "layout_detail",
+    sectionTitle: "Layout Detail",
+    priority: "detail",
+    control: CONTROL_TEMPLATES.bar_height,
+  },
+  "source_data.layout.labelGap": {
+    sectionId: "layout_detail",
+    sectionTitle: "Layout Detail",
+    priority: "detail",
+    control: CONTROL_TEMPLATES.label_gap,
+  },
   "source_data.style.waitingAreaColor": {
     sectionId: "theme_detail",
     sectionTitle: "Theme Detail",
@@ -531,8 +565,41 @@ function safeClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+const TASK_DETAIL_REGISTRY = {
+  aspect_ratio: {
+    primarySectionId: "layout_primary",
+    detailSectionIds: ["layout_detail"],
+  },
+  color_theme: {
+    primarySectionId: "theme_primary",
+    detailSectionIds: ["theme_detail"],
+  },
+  add_element: {
+    primarySectionId: "data_table",
+    detailSectionIds: ["data_table"],
+  },
+  remove_element: {
+    primarySectionId: "data_table",
+    detailSectionIds: ["data_table"],
+  },
+  legend_edit: {
+    primarySectionId: "legend_primary",
+    detailSectionIds: ["legend_detail"],
+  },
+};
+
+const TARGET_TASK_REGISTRY = {
+  layout: ["aspect_ratio"],
+  style: ["color_theme"],
+  theme: ["color_theme"],
+  color: ["color_theme"],
+  data: ["add_element"],
+  legend: ["legend_edit"],
+  controls: ["aspect_ratio", "color_theme", "legend_edit"],
+};
+
 export function getTaskPrimarySectionId(task) {
-  return TASK_SECTION_REGISTRY[task]?.primarySectionId || "layout_primary";
+  return TASK_DETAIL_REGISTRY[task]?.primarySectionId || TASK_SECTION_REGISTRY[task]?.primarySectionId || "layout_primary";
 }
 
 export function getTaskSections(task) {
@@ -543,4 +610,25 @@ export function getTaskSections(task) {
 export function getAffectedControlConfig(bindingKey) {
   const config = AFFECTED_CONTROL_REGISTRY[bindingKey];
   return config ? safeClone(config) : null;
+}
+
+export function getTaskDetailSectionIds(task) {
+  const sectionIds = TASK_DETAIL_REGISTRY[task]?.detailSectionIds || [];
+  return safeClone(sectionIds);
+}
+
+export function getTasksByTarget(target) {
+  const tasks = TARGET_TASK_REGISTRY[target] || [];
+  return safeClone(tasks);
+}
+
+export function getSectionTemplateById(sectionId) {
+  const tasks = Object.keys(TASK_SECTION_REGISTRY);
+  for (const task of tasks) {
+    const section = (TASK_SECTION_REGISTRY[task]?.sections || []).find((item) => item.sectionId === sectionId);
+    if (section) {
+      return safeClone(section);
+    }
+  }
+  return null;
 }
