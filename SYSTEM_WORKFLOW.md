@@ -182,3 +182,4 @@ PromptBar.submit
     -> parts/panelSpec reactive update
       -> CodePanel / ChartPreview / ControlPanel rerender
 ```
+
