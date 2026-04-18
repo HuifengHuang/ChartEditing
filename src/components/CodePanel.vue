@@ -15,7 +15,6 @@ defineProps({
   <section class="code-panel panel">
     <header class="panel-header">
       <h2>Code Panel</h2>
-      <p>Structured code display (read-only)</p>
     </header>
 
     <div class="code-sections">
@@ -47,12 +46,6 @@ defineProps({
 .panel-header h2 {
   margin: 0;
   font-size: 18px;
-}
-
-.panel-header p {
-  margin: 4px 0 0;
-  color: #6b7280;
-  font-size: 13px;
 }
 
 .code-sections {

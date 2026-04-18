@@ -402,8 +402,6 @@ function isRowActionEnabled(action) {
       <div class="control-header">
         <div class="control-title">
           <label>{{ control.label }}</label>
-          <small v-if="control.description">{{ control.description }}</small>
-          <small v-if="control.impactDescription" class="impact">{{ control.impactDescription }}</small>
         </div>
         <button
           v-if="control.expandable && control.detailSectionRef"
@@ -540,7 +538,6 @@ function isRowActionEnabled(action) {
 
       <div v-else-if="control.controlType === 'table'" class="table-wrap">
         <div class="table-toolbar">
-          <small>Orientation: {{ tableOrientation }}</small>
           <button v-if="isRowActionEnabled('add')" type="button" class="action-btn" @click="onTableAddRow">Add Row</button>
         </div>
 
@@ -636,15 +633,6 @@ function isRowActionEnabled(action) {
   font-size: 13px;
   font-weight: 600;
   color: #111827;
-}
-
-.control-title small {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.impact {
-  color: #1d4ed8;
 }
 
 .expand-btn,

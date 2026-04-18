@@ -104,7 +104,6 @@ defineExpose({
   <section class="preview-panel panel">
     <header class="panel-header">
       <h2>Chart Preview</h2>
-      <p>iframe + srcdoc live rendering</p>
     </header>
     <iframe
       ref="iframeRef"
@@ -129,12 +128,6 @@ defineExpose({
 .panel-header h2 {
   margin: 0;
   font-size: 18px;
-}
-
-.panel-header p {
-  margin: 4px 0 0;
-  color: #6b7280;
-  font-size: 13px;
 }
 
 iframe {

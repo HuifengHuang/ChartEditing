@@ -127,7 +127,6 @@ function isHighlighted(sectionId) {
   <section class="control-panel panel">
     <header class="panel-header">
       <h2>{{ panelSpec.title }}</h2>
-      <p>{{ panelSpec.description }}</p>
     </header>
 
     <div v-if="!validationResult.isValid" class="fallback-warning">
@@ -143,7 +142,6 @@ function isHighlighted(sectionId) {
       >
         <header class="section-header">
           <h3>{{ section.title }}</h3>
-          <p v-if="section.description">{{ section.description }}</p>
         </header>
 
         <div class="controls-list">
@@ -180,12 +178,6 @@ function isHighlighted(sectionId) {
   font-size: 18px;
 }
 
-.panel-header p {
-  margin: 4px 0 0;
-  color: #6b7280;
-  font-size: 13px;
-}
-
 .fallback-warning {
   margin-top: 10px;
   padding: 8px 10px;
@@ -217,12 +209,6 @@ function isHighlighted(sectionId) {
 .section-header h3 {
   margin: 0;
   font-size: 14px;
-}
-
-.section-header p {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: #6b7280;
 }
 
 .controls-list {
