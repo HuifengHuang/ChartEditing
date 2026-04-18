@@ -2,14 +2,6 @@
 import { ref } from "vue";
 
 const props = defineProps({
-  defaultMode: {
-    type: String,
-    default: "auto",
-  },
-  defaultProvider: {
-    type: String,
-    default: "yizhan",
-  },
   busy: {
     type: Boolean,
     default: false,
@@ -32,11 +24,7 @@ function submit() {
   if (!value || props.busy) {
     return;
   }
-  emit("submit-prompt", {
-    prompt: value,
-    mode: props.defaultMode,
-    provider: props.defaultProvider,
-  });
+  emit("submit-prompt", value);
 }
 
 function useSample(value) {

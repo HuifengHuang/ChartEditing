@@ -14,7 +14,6 @@ import { parseIntent as parseIntentByRule } from "./utils/parseIntent";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
 import { applyUpdatePlan } from "./utils/applyUpdatePlan";
 import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
-import { llmConfig } from "./config/llmConfig.js";
 
 const parts = ref(createSampleChartPartsMirroredMood());
 
@@ -53,24 +52,11 @@ function buildIntentContext() {
   };
 }
 
-async function resolveIntent({ prompt, mode, provider }) {
-  if (mode === "rule") {
-    return parseIntentByRule(prompt);
-  }
-
-  if (mode === "llm") {
-    return parseIntentWithLLM({
-      prompt,
-      context: buildIntentContext(),
-      provider,
-    });
-  }
-
+async function resolveIntent(prompt) {
   try {
     const intent = await parseIntentWithLLM({
       prompt,
       context: buildIntentContext(),
-      provider,
     });
     notice.value = "LLM parser succeeded.";
     return intent;
@@ -85,21 +71,17 @@ async function handlePromptSubmit(payload) {
     return;
   }
 
-  const input = typeof payload === "string" ? { prompt: payload } : payload || {};
-  const prompt = String(input.prompt || "").trim();
+  const prompt = String(payload || "").trim();
   if (!prompt) {
     return;
   }
-
-  const mode = input.mode || llmConfig.mode;
-  const provider = input.provider || llmConfig.provider;
 
   busy.value = true;
   notice.value = "";
   errorMessage.value = "";
 
   try {
-    const intent = await resolveIntent({ prompt, mode, provider });
+    const intent = await resolveIntent(prompt);
     const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
     const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
     parts.value = nextState.parts;
@@ -121,8 +103,6 @@ async function handlePromptSubmit(payload) {
     </header>
 
     <PromptBar
-      :default-mode="llmConfig.mode"
-      :default-provider="llmConfig.provider"
       :busy="busy"
       @submit-prompt="handlePromptSubmit"
     />

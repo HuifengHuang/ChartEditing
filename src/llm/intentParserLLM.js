@@ -1,4 +1,3 @@
-import { parseIntent } from "../utils/parseIntent.js";
 import { llmConfig } from "../config/llmConfig.js";
 import { buildIntentPrompt } from "./intentPromptBuilder.js";
 import { parseIntentResponse } from "./intentResponseParser.js";
@@ -13,11 +12,7 @@ function createAbortSignal(timeoutMs) {
   };
 }
 
-function parseIntentWithMock(prompt) {
-  return validateIntentSpec(parseIntent(prompt));
-}
-
-async function parseIntentWithYizhanProxy({ prompt, context, imageBase64, provider }) {
+async function parseIntentWithYizhanProxy({ prompt, context, imageBase64 }) {
   const promptText = buildIntentPrompt({ prompt, context });
   const timeout = createAbortSignal(llmConfig.timeoutMs);
 
@@ -32,7 +27,7 @@ async function parseIntentWithYizhanProxy({ prompt, context, imageBase64, provid
         promptText,
         context,
         imageBase64: imageBase64 || null,
-        provider,
+        provider: "yizhan",
       }),
       signal: timeout.signal,
     });
@@ -55,16 +50,10 @@ export async function parseIntentWithLLM({
   prompt,
   context,
   imageBase64 = null,
-  provider = llmConfig.provider,
 }) {
-  if (provider === "mock") {
-    return parseIntentWithMock(prompt);
-  }
-
   return parseIntentWithYizhanProxy({
     prompt,
     context,
     imageBase64,
-    provider: "yizhan",
   });
 }

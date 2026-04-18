@@ -12,8 +12,6 @@ npm run dev
 Optional env vars (`.env` at project root):
 
 ```bash
-VITE_INTENT_PARSE_MODE=auto   # rule | llm | auto
-VITE_INTENT_PROVIDER=yizhan   # mock | yizhan
 VITE_INTENT_PROXY_ENDPOINT=/api/intent-parse
 VITE_INTENT_TIMEOUT_MS=30000
 ```
@@ -48,7 +46,4 @@ python intent_api.py
 
 1. Start backend on `http://127.0.0.1:8000`
 2. Start frontend with `npm run dev`
-3. In PromptBar, choose:
-   - `rule`: rule parser only
-   - `llm`: LLM parser only (fails on error)
-   - `auto`: LLM first, fallback to rule parser
+3. Enter intent text in PromptBar and click `Run` (LLM first, fallback to rule parser on failure)
