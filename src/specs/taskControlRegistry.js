@@ -402,22 +402,7 @@ const TASK_SECTION_REGISTRY = {
       },
     ],
   },
-  add_element: {
-    primarySectionId: "data_table",
-    sections: [
-      {
-        sectionId: "data_table",
-        title: "Data Table",
-        priority: "primary",
-        controls: [
-          CONTROL_TEMPLATES.table_orientation,
-          CONTROL_TEMPLATES.mood_data_table,
-          CONTROL_TEMPLATES.fixed_chart_size,
-        ],
-      },
-    ],
-  },
-  remove_element: {
+  element_edit: {
     primarySectionId: "data_table",
     sections: [
       {
@@ -444,23 +429,6 @@ const TASK_SECTION_REGISTRY = {
       {
         sectionId: "legend_detail",
         title: "Legend Items Detail",
-        priority: "detail",
-        controls: [],
-      },
-    ],
-  },
-  expand_controls: {
-    primarySectionId: "layout_primary",
-    sections: [
-      {
-        sectionId: "layout_primary",
-        title: "Layout",
-        priority: "primary",
-        controls: [CONTROL_TEMPLATES.aspect_ratio],
-      },
-      {
-        sectionId: "layout_detail",
-        title: "Layout Detail",
         priority: "detail",
         controls: [],
       },
@@ -574,11 +542,7 @@ const TASK_DETAIL_REGISTRY = {
     primarySectionId: "theme_primary",
     detailSectionIds: ["theme_detail"],
   },
-  add_element: {
-    primarySectionId: "data_table",
-    detailSectionIds: ["data_table"],
-  },
-  remove_element: {
+  element_edit: {
     primarySectionId: "data_table",
     detailSectionIds: ["data_table"],
   },
@@ -593,9 +557,9 @@ const TARGET_TASK_REGISTRY = {
   style: ["color_theme"],
   theme: ["color_theme"],
   color: ["color_theme"],
-  data: ["add_element"],
+  data: ["element_edit"],
   legend: ["legend_edit"],
-  controls: ["aspect_ratio", "color_theme", "legend_edit"],
+  controls: ["aspect_ratio", "color_theme", "element_edit", "legend_edit"],
 };
 
 export function getTaskPrimarySectionId(task) {

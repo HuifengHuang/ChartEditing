@@ -59,14 +59,14 @@
    - `prompt`
    - `promptText`（完整提示词）
    - `context`
-   - `imageBase64`（当前可为空）
+   - `imageBase64`（优先发送当前图表截图；抓取失败时为 `null`）
    - `provider: "yizhan"`（固定）
 4. 响应处理：
    - 读取 `raw_text`
    - `parseIntentResponse(raw_text)` 提取 JSON
    - `validateIntentSpec(...)` 校验并兜底
 
-说明：当前仍是 text-only 意图解析工作流，不做图片上传或图像参与解析。
+说明：当前是 text + visual 联合意图解析（图表截图 + 状态摘要）。若视觉解析失败，会自动回退到 text-only LLM，再回退 rule parser。
 
 配置文件：`src/config/llmConfig.js`
 
@@ -98,10 +98,8 @@
 
 1. `aspect_ratio`
 2. `color_theme`
-3. `add_element`
-4. `remove_element`
-5. `legend_edit`
-6. `expand_controls`
+3. `element_edit`
+4. `legend_edit`
 
 默认返回可用的兜底意图，保证后续流程不中断。
 
@@ -123,7 +121,7 @@
    - 增删数据：操作 `source_data.data`
    - 图例任务：更新方向、字号等
 3. 按需触发 detail section 展开（如 `layout_detail`、`theme_detail`、`legend_detail`）。
-4. `expand_controls` 会优先根据 `target` 展开相关 detail section，而不是泛化地全部展开。
+4. “展开细节”不再是独立 task，而是通过 `detailRequested=true` 驱动对应任务展开 detail section。
 
 ## 7. UpdatePlan 执行
 

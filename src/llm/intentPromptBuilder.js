@@ -10,12 +10,13 @@ export function buildIntentPrompt({ prompt, context }) {
   const schemaText = `{
   "intentId": "string",
   "intentType": "style | data",
-  "task": "aspect_ratio | color_theme | add_element | remove_element | legend_edit | expand_controls",
-  "target": ["layout | style | data | legend | controls"],
-  "action": "update | add | remove | expand_panel | show_panel",
+  "task": "aspect_ratio | color_theme | element_edit | legend_edit",
+  "target": ["layout | style | data | legend"],
+  "action": "update | add | remove | show_panel",
   "parameters": {},
   "needPanel": true,
-  "panelStrategy": "create | extend | reuse"
+  "panelStrategy": "create | extend | reuse",
+  "detailRequested": false
 }`;
 
   return [
@@ -25,15 +26,16 @@ export function buildIntentPrompt({ prompt, context }) {
     schemaText,
     "",
     "Constraints:",
-    "- task must be one of: aspect_ratio, color_theme, add_element, remove_element, legend_edit, expand_controls",
-    "- action must be one of: update, add, remove, expand_panel, show_panel",
+    "- task must be one of: aspect_ratio, color_theme, element_edit, legend_edit",
+    "- action must be one of: update, add, remove, show_panel",
     "- intentType must be style or data",
     "- If month/value cannot be extracted, keep parameters minimal but still valid.",
-    "- Panel-first policy: prefer exposing/reusing high-level controls, then expand detail sections only when user asks for details.",
-    "- For color_theme: DO NOT set themeHint by default. Only set parameters.themeHint + parameters.applyPreset=true when user explicitly asks warm/cool/soft theme.",
-    "- For color detail requests (e.g. show all color items), prefer task=color_theme with parameters.detail=true, or task=expand_controls with target=['style'].",
-    "- For expand/detail requests, set task=expand_controls and include specific targets among: layout/style/data/legend when possible.",
-    "- For legend item editing requests, prefer task=legend_edit and set parameters.editItems=true.",
+    "- Panel-first policy: prefer exposing/reusing high-level controls first. Detail controls are only requested when needed.",
+    "- detailRequested=true means the user asks to show finer-grained controls. It is NOT an independent task.",
+    "- Do NOT output task=expand_controls / add_element / remove_element.",
+    "- For element add/remove/edit-table requests, use task=element_edit and choose action add/remove/show_panel.",
+    "- For color_theme, only set parameters.themeHint and parameters.applyPreset=true when the hint is explicit (warm/cool/soft).",
+    "- Use visual and context clues for relative descriptions (e.g. taller/wider, legend closer, yellow series). Map back to one of the 4 tasks.",
     "",
     "Editor context:",
     safeJson(context || {}),

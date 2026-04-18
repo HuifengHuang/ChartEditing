@@ -9,11 +9,11 @@ export const sampleIntentCases = [
   },
   {
     prompt: "加一个 2024-01 的数据点",
-    expectedTask: "add_element",
+    expectedTask: "element_edit",
   },
   {
     prompt: "删掉 2023-02",
-    expectedTask: "remove_element",
+    expectedTask: "element_edit",
   },
   {
     prompt: "图例横着排",

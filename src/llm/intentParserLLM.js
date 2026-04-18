@@ -14,6 +14,8 @@ function createAbortSignal(timeoutMs) {
 
 async function parseIntentWithYizhanProxy({ prompt, context, imageBase64 }) {
   const promptText = buildIntentPrompt({ prompt, context });
+  const normalizedImageBase64 =
+    typeof imageBase64 === "string" && imageBase64.trim() ? imageBase64.trim() : null;
   const timeout = createAbortSignal(llmConfig.timeoutMs);
 
   try {
@@ -26,7 +28,7 @@ async function parseIntentWithYizhanProxy({ prompt, context, imageBase64 }) {
         prompt,
         promptText,
         context,
-        imageBase64: imageBase64 || null,
+        imageBase64: normalizedImageBase64,
         provider: "yizhan",
       }),
       signal: timeout.signal,
@@ -39,6 +41,9 @@ async function parseIntentWithYizhanProxy({ prompt, context, imageBase64 }) {
     }
 
     const rawText = String(payload?.raw_text || payload?.text || "");
+    if (!rawText.trim()) {
+      throw new Error("LLM response is empty.");
+    }
     const parsed = parseIntentResponse(rawText);
     return validateIntentSpec(parsed);
   } finally {

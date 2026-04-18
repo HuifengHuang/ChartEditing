@@ -2,12 +2,13 @@
  * @typedef {Object} IntentSpec
  * @property {string} intentId
  * @property {"style" | "data"} intentType
- * @property {"aspect_ratio" | "color_theme" | "add_element" | "remove_element" | "legend_edit" | "expand_controls"} task
+ * @property {"aspect_ratio" | "color_theme" | "element_edit" | "legend_edit"} task
  * @property {string[]} target
- * @property {"update" | "add" | "remove" | "expand_panel" | "show_panel"} action
+ * @property {"update" | "add" | "remove" | "show_panel"} action
  * @property {Record<string, any>} parameters
  * @property {boolean} needPanel
  * @property {"create" | "extend" | "reuse"} panelStrategy
+ * @property {boolean=} detailRequested
  */
 
 /**
@@ -39,10 +40,8 @@
 export const SUPPORTED_INTENT_TASKS = [
   "aspect_ratio",
   "color_theme",
-  "add_element",
-  "remove_element",
+  "element_edit",
   "legend_edit",
-  "expand_controls",
 ];
 
 export function createDefaultIntentSpec() {
@@ -55,5 +54,6 @@ export function createDefaultIntentSpec() {
     parameters: {},
     needPanel: true,
     panelStrategy: "reuse",
+    detailRequested: false,
   };
 }

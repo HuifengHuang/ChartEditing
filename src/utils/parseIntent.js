@@ -4,27 +4,6 @@ function containsAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
-function uniq(values) {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
-function detectExpandTargets(normalized) {
-  const targets = [];
-  if (containsAny(normalized, ["比例", "尺寸", "布局", "长宽", "aspect", "layout"])) {
-    targets.push("layout");
-  }
-  if (containsAny(normalized, ["颜色", "配色", "色调", "主题", "风格", "color", "theme", "style"])) {
-    targets.push("style");
-  }
-  if (containsAny(normalized, ["图例", "legend"])) {
-    targets.push("legend");
-  }
-  if (containsAny(normalized, ["数据", "表格", "月份", "行", "row", "data", "table"])) {
-    targets.push("data");
-  }
-  return uniq(targets);
-}
-
 function normalizeMonth(monthMatch) {
   if (!monthMatch) {
     return null;
@@ -68,22 +47,8 @@ function createIntentId() {
   return `intent_${Date.now()}_${random}`;
 }
 
-export function parseIntent(prompt) {
-  const base = createDefaultIntentSpec();
-  const rawPrompt = String(prompt || "").trim();
-  if (!rawPrompt) {
-    return {
-      ...base,
-      intentId: createIntentId(),
-    };
-  }
-
-  const normalized = rawPrompt.toLowerCase();
-  const month = extractMonth(rawPrompt);
-  const ratio = extractRatio(rawPrompt);
-
-  const isExpandControls = containsAny(normalized, ["展开控件", "展开面板", "show controls", "expand controls", "more controls"]);
-  const hasDetailIntent = containsAny(normalized, [
+function detectDetailRequested(normalized) {
+  return containsAny(normalized, [
     "展开",
     "细节",
     "更细",
@@ -92,32 +57,51 @@ export function parseIntent(prompt) {
     "显示出来",
     "都显示",
     "更多",
+    "单独改",
+    "item",
     "detail",
     "show all",
+    "fine-grained",
   ]);
+}
+
+function createBaseIntent(rawPrompt) {
+  const base = createDefaultIntentSpec();
+  return {
+    ...base,
+    intentId: createIntentId(),
+    action: rawPrompt ? "show_panel" : base.action,
+  };
+}
+
+export function parseIntent(prompt) {
+  const rawPrompt = String(prompt || "").trim();
+  if (!rawPrompt) {
+    return createBaseIntent(rawPrompt);
+  }
+
+  const normalized = rawPrompt.toLowerCase();
+  const month = extractMonth(rawPrompt);
+  const ratio = extractRatio(rawPrompt);
+  const detailRequested = detectDetailRequested(normalized);
+
   const isLegend = containsAny(normalized, ["图例", "legend"]);
   const isRemove = containsAny(normalized, ["删", "删除", "移除", "去掉", "remove"]);
   const isAdd = containsAny(normalized, ["新增", "添加", "加一个", "加一行", "增加", "add"]);
-  const hasDataWord = containsAny(normalized, ["数据", "月份", "month", "行", "row"]);
+  const mentionBulkElementEdit = containsAny(normalized, ["增删", "增减", "编辑元素", "编辑数据", "调增删"]);
+  const hasDataWord = containsAny(normalized, [
+    "数据",
+    "月份",
+    "month",
+    "行",
+    "row",
+    "数据表",
+    "table",
+    "元素",
+    "增删",
+  ]);
   const isAspect = containsAny(normalized, ["比例", "尺寸", "变高", "拉宽", "变宽", "高一点", "宽一点", "aspect ratio"]);
-  const isColorTheme = containsAny(normalized, ["颜色", "配色", "色调", "风格", "主题", "theme"]);
-  const expandTargets = detectExpandTargets(normalized);
-
-  if (isExpandControls) {
-    const targets = expandTargets.length ? expandTargets : ["controls"];
-    return {
-      intentId: createIntentId(),
-      intentType: "style",
-      task: "expand_controls",
-      target: targets,
-      action: "expand_panel",
-      parameters: {
-        detail: true,
-      },
-      needPanel: true,
-      panelStrategy: "extend",
-    };
-  }
+  const isColorTheme = containsAny(normalized, ["颜色", "配色", "色调", "风格", "主题", "theme", "黄色", "蓝色"]);
 
   if (isLegend) {
     const direction = containsAny(normalized, ["横", "横着", "水平", "horizontal"])
@@ -127,63 +111,49 @@ export function parseIntent(prompt) {
         : undefined;
     const fontBigger = containsAny(normalized, ["字体调大", "字体变大", "字大", "调大", "bigger font"]);
     const editItems = containsAny(normalized, ["单独", "每个图例项", "图例项", "item"]);
-    const detail = hasDetailIntent || editItems;
+    const action = direction || fontBigger ? "update" : "show_panel";
 
     return {
       intentId: createIntentId(),
       intentType: "style",
       task: "legend_edit",
       target: ["legend"],
-      action: "update",
+      action,
       parameters: {
         ...(direction ? { direction } : {}),
         ...(fontBigger ? { fontDelta: 2 } : {}),
         ...(editItems ? { editItems: true } : {}),
-        ...(detail ? { detail: true } : {}),
       },
       needPanel: true,
-      panelStrategy: detail ? "extend" : "reuse",
+      panelStrategy: detailRequested || editItems ? "extend" : "reuse",
+      detailRequested: detailRequested || editItems,
     };
   }
 
-  if (isRemove && (hasDataWord || month)) {
-    return {
-      intentId: createIntentId(),
-      intentType: "data",
-      task: "remove_element",
-      target: ["data"],
-      action: "remove",
-      parameters: {
-        ...(month ? { month } : {}),
-      },
-      needPanel: true,
-      panelStrategy: "reuse",
-    };
-  }
-
-  if (isAdd && (hasDataWord || month)) {
+  if (isAdd || isRemove || hasDataWord || month) {
     const values = extractValueCandidates(rawPrompt, month);
     const waitingArea = values.length >= 1 ? values[0] : undefined;
     const corridor = values.length >= 2 ? values[1] : undefined;
+    const action = mentionBulkElementEdit ? "show_panel" : isAdd ? "add" : isRemove ? "remove" : "show_panel";
 
     return {
       intentId: createIntentId(),
       intentType: "data",
-      task: "add_element",
+      task: "element_edit",
       target: ["data"],
-      action: "add",
+      action,
       parameters: {
         ...(month ? { month } : {}),
         ...(waitingArea !== undefined ? { waitingArea } : {}),
         ...(corridor !== undefined ? { corridor } : {}),
       },
       needPanel: true,
-      panelStrategy: "reuse",
+      panelStrategy: detailRequested ? "extend" : "reuse",
+      detailRequested,
     };
   }
 
   if (isAspect) {
-    const isDetailed = containsAny(normalized, ["详细", "微调", "细一点", "detail"]) || hasDetailIntent;
     const sizeHint = containsAny(normalized, ["拉宽", "变宽", "宽一点", "wider"])
       ? "wider"
       : containsAny(normalized, ["变高", "高一点", "taller"])
@@ -195,19 +165,19 @@ export function parseIntent(prompt) {
       intentType: "style",
       task: "aspect_ratio",
       target: ["layout"],
-      action: "update",
+      action: ratio || sizeHint ? "update" : "show_panel",
       parameters: {
         ...(ratio ? { aspectRatio: ratio } : {}),
         ...(sizeHint ? { sizeHint } : {}),
-        ...(isDetailed ? { detail: true } : {}),
       },
       needPanel: true,
-      panelStrategy: isDetailed ? "extend" : "reuse",
+      panelStrategy: detailRequested ? "extend" : "reuse",
+      detailRequested,
     };
   }
 
   if (isColorTheme) {
-    const hasExplicitThemeHint = containsAny(normalized, ["柔和", "soft", "冷色", "cool", "蓝色", "蓝调", "暖色", "warm", "暖调"]);
+    const hasExplicitThemeHint = containsAny(normalized, ["柔和", "soft", "冷色", "cool", "蓝调", "暖色", "warm", "暖调"]);
     const themeHint = containsAny(normalized, ["柔和", "soft"])
       ? "soft"
       : containsAny(normalized, ["冷色", "冷", "cool", "蓝"])
@@ -215,43 +185,37 @@ export function parseIntent(prompt) {
         : containsAny(normalized, ["暖色", "暖", "warm"])
           ? "warm"
           : undefined;
-    const detail = containsAny(normalized, ["细", "详细", "具体颜色", "颜色项"]) || hasDetailIntent;
+    const applyPreset = Boolean(themeHint && hasExplicitThemeHint);
 
     return {
       intentId: createIntentId(),
       intentType: "style",
       task: "color_theme",
       target: ["style"],
-      action: "show_panel",
+      action: applyPreset ? "update" : "show_panel",
       parameters: {
         ...(themeHint ? { themeHint } : {}),
-        ...(themeHint && hasExplicitThemeHint ? { applyPreset: true } : {}),
-        ...(detail ? { detail: true } : {}),
+        ...(applyPreset ? { applyPreset: true } : {}),
       },
       needPanel: true,
-      panelStrategy: detail ? "extend" : "reuse",
+      panelStrategy: detailRequested ? "extend" : "reuse",
+      detailRequested,
     };
   }
 
-  if (hasDetailIntent) {
-    const targets = expandTargets.length ? expandTargets : ["controls"];
+  if (detailRequested) {
     return {
       intentId: createIntentId(),
       intentType: "style",
-      task: "expand_controls",
-      target: targets,
-      action: "expand_panel",
-      parameters: {
-        detail: true,
-      },
+      task: "color_theme",
+      target: ["style"],
+      action: "show_panel",
+      parameters: {},
       needPanel: true,
       panelStrategy: "extend",
+      detailRequested: true,
     };
   }
 
-  return {
-    ...base,
-    intentId: createIntentId(),
-    action: "show_panel",
-  };
+  return createBaseIntent(rawPrompt);
 }

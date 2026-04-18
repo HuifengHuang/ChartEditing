@@ -1,6 +1,6 @@
 import { SUPPORTED_INTENT_TASKS, createDefaultIntentSpec } from "../specs/intentSchema.js";
 
-const ACTION_SET = new Set(["update", "add", "remove", "expand_panel", "show_panel"]);
+const ACTION_SET = new Set(["update", "add", "remove", "show_panel"]);
 const TYPE_SET = new Set(["style", "data"]);
 const STRATEGY_SET = new Set(["create", "extend", "reuse"]);
 
@@ -28,5 +28,6 @@ export function validateIntentSpec(rawIntent) {
     parameters: asObject(intent.parameters),
     needPanel: intent.needPanel !== false,
     panelStrategy,
+    detailRequested: Boolean(intent.detailRequested),
   };
 }
