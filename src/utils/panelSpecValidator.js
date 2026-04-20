@@ -47,9 +47,6 @@ function validateControl(control, sectionId, issues) {
     if (!hasValue(control.schemaSource)) {
       issues.push(createIssue("warning", "Table control should define schemaSource", sectionId, control.id));
     }
-    if (!hasValue(control.tableOrientation)) {
-      issues.push(createIssue("warning", "Table control tableOrientation defaults to auto", sectionId, control.id));
-    }
   }
 }
 

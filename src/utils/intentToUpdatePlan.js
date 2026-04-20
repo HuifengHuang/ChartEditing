@@ -142,18 +142,6 @@ function maybeCreateAutoSpacingUpdate(currentParts, deltaCount) {
   return { type: "set", path: "source_data.layout.rowStep", value: rowStep };
 }
 
-function ensureTableOrientationUpdate(plan, currentParts) {
-  const orientation = currentParts?.source_data?.meta?.tableOrientation;
-  if (orientation === "row-major" || orientation === "column-major") {
-    return;
-  }
-  plan.sourceDataUpdates.push({
-    type: "set",
-    path: "source_data.meta.tableOrientation",
-    value: "row-major",
-  });
-}
-
 function isAction(intentSpec, action) {
   return String(intentSpec?.action || "") === action;
 }
@@ -192,7 +180,6 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
 
   if (intentSpec.task === "element_edit") {
     ensureTaskPanel(plan, currentPanelSpec, "element_edit");
-    ensureTableOrientationUpdate(plan, currentParts);
 
     if (isAction(intentSpec, "add")) {
       plan.sourceDataUpdates.push({

@@ -204,18 +204,6 @@ function createControlTemplates() {
       bind: "source_data.style.subtitleColor",
       valueType: "color",
     },
-    table_orientation: {
-      id: "table_orientation",
-      label: "Table Orientation",
-      controlType: "select",
-      operationType: "update",
-      bindingMode: "single",
-      bind: "source_data.meta.tableOrientation",
-      options: [
-        { label: "Row Major", value: "row-major" },
-        { label: "Column Major", value: "column-major" },
-      ],
-    },
     mood_data_table: {
       id: "mood_data_table",
       label: "Data Table",
@@ -226,8 +214,6 @@ function createControlTemplates() {
       rowKey: "month",
       rowActions: ["add", "remove"],
       schemaSource: "mixed",
-      tableOrientation: "auto",
-      orientationKey: "source_data.meta.tableOrientation",
       tableSchema: [
         { key: "month", label: "Month", valueType: "string", editable: true },
         { key: "waitingArea", label: "Waiting Area", valueType: "number", editable: true },
@@ -348,7 +334,6 @@ function createControlTemplates() {
       rowKey: "id",
       rowActions: ["add", "remove"],
       schemaSource: "mixed",
-      tableOrientation: "row-major",
       tableSchema: [
         { key: "id", label: "ID", valueType: "string", editable: true },
         { key: "label", label: "Label", valueType: "string", editable: true },
@@ -410,7 +395,6 @@ const TASK_SECTION_REGISTRY = {
         title: "Data Table",
         priority: "primary",
         controls: [
-          CONTROL_TEMPLATES.table_orientation,
           CONTROL_TEMPLATES.mood_data_table,
           CONTROL_TEMPLATES.fixed_chart_size,
         ],

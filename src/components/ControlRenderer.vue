@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ensureCollectionByPath, getCollectionByPath } from "../utils/collectionUtils";
-import { getValueByPath, setValueByPath } from "../utils/pathUtils";
+import { getValueByPath } from "../utils/pathUtils";
 
 const props = defineProps({
   control: {
@@ -319,44 +319,6 @@ const tableColumns = computed(() => {
   return autoSchema.filter((column) => !column.hidden);
 });
 
-const tableOrientation = computed(() => {
-  if (props.control.controlType !== "table") {
-    return "row-major";
-  }
-
-  const orientation = props.control.tableOrientation || "auto";
-  if (orientation !== "auto") {
-    return orientation;
-  }
-
-  if (props.control.orientationKey) {
-    const value = getValueByPath(props.parts, props.control.orientationKey);
-    if (value === "row-major" || value === "column-major") {
-      return value;
-    }
-  }
-
-  return "row-major";
-});
-
-watch(
-  () => [props.control.controlType, props.control.tableOrientation, props.control.orientationKey],
-  () => {
-    if (props.control.controlType !== "table") {
-      return;
-    }
-    if (props.control.tableOrientation !== "auto" || !props.control.orientationKey) {
-      return;
-    }
-    const current = getValueByPath(props.parts, props.control.orientationKey);
-    if (current === "row-major" || current === "column-major") {
-      return;
-    }
-    setValueByPath(props.parts, props.control.orientationKey, "row-major");
-  },
-  { immediate: true }
-);
-
 function normalizeTableCellValue(rawValue, column) {
   return normalizeInputValue(rawValue, column.valueType, column.valueType);
 }
@@ -541,7 +503,7 @@ function isRowActionEnabled(action) {
           <button v-if="isRowActionEnabled('add')" type="button" class="action-btn" @click="onTableAddRow">Add Row</button>
         </div>
 
-        <table v-if="tableOrientation === 'row-major'">
+        <table>
           <thead>
             <tr>
               <th v-for="column in tableColumns" :key="column.key">{{ column.label || column.key }}</th>
@@ -561,39 +523,6 @@ function isRowActionEnabled(action) {
               </td>
               <td v-if="isRowActionEnabled('remove')">
                 <button type="button" class="danger-btn" @click="onTableRemoveRow(rowIndex, row)">Remove</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table v-else>
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th v-for="(row, rowIndex) in collection" :key="`${row?.[control.rowKey] ?? rowIndex}`">
-                {{ row?.[control.rowKey] ?? `Item ${rowIndex + 1}` }}
-                <button
-                  v-if="isRowActionEnabled('remove')"
-                  type="button"
-                  class="danger-btn mini"
-                  @click="onTableRemoveRow(rowIndex, row)"
-                >
-                  x
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="column in tableColumns" :key="column.key">
-              <th>{{ column.label || column.key }}</th>
-              <td v-for="(row, rowIndex) in collection" :key="`${column.key}-${rowIndex}`">
-                <input
-                  v-if="column.editable !== false"
-                  :type="column.valueType === 'number' ? 'number' : column.valueType === 'color' ? 'color' : 'text'"
-                  :value="row?.[column.key]"
-                  @input="onTableCellInput(rowIndex, column, $event.target.value)"
-                />
-                <span v-else>{{ row?.[column.key] }}</span>
               </td>
             </tr>
           </tbody>

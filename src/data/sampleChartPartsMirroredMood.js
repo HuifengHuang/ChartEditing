@@ -96,7 +96,6 @@ const sampleChartPartsMirroredMoodTemplate = {
       subtitleFontSize: 12,
     },
     meta: {
-      tableOrientation: "row-major",
       aspectRatioPreset: "420x520",
     },
   },

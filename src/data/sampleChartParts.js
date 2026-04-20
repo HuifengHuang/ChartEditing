@@ -47,7 +47,6 @@ const sampleChartPartsTemplate = {
       { category: "E", value: 76 },
     ],
     meta: {
-      tableOrientation: "row-major",
       aspectRatioPreset: "16:9",
     },
     legend: {

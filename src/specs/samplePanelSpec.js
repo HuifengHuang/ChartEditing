@@ -51,8 +51,6 @@
  * @property {{path: string, equals: any}|null=} visibilityCondition
  * @property {Array<{key: string, label?: string, valueType?: "number"|"string"|"color"|"boolean", editable?: boolean, hidden?: boolean}>=} tableSchema
  * @property {"auto"|"manual"|"mixed"=} schemaSource
- * @property {"auto"|"row-major"|"column-major"=} tableOrientation
- * @property {string=} orientationKey
  * @property {string[]=} columnOrder
  * @property {string=} rowKey
  * @property {Array<"add"|"remove">=} rowActions
@@ -286,19 +284,6 @@ export const samplePanelSpec = {
       priority: "primary",
       controls: [
         {
-          id: "table_orientation",
-          label: "Table Orientation",
-          controlType: "select",
-          operationType: "update",
-          bindingMode: "single",
-          bind: "source_data.meta.tableOrientation",
-          options: [
-            { label: "Row Major", value: "row-major" },
-            { label: "Column Major", value: "column-major" },
-          ],
-          defaultValue: "row-major",
-        },
-        {
           id: "dataset_table",
           label: "Dataset Editor",
           controlType: "table",
@@ -308,8 +293,6 @@ export const samplePanelSpec = {
           rowKey: "category",
           rowActions: ["add", "remove"],
           schemaSource: "mixed",
-          tableOrientation: "auto",
-          orientationKey: "source_data.meta.tableOrientation",
           tableSchema: [
             { key: "category", label: "Category", valueType: "string", editable: true },
             { key: "value", label: "Value", valueType: "number", editable: true },
@@ -392,7 +375,6 @@ export const samplePanelSpec = {
           rowKey: "id",
           rowActions: ["add", "remove"],
           schemaSource: "mixed",
-          tableOrientation: "row-major",
           tableSchema: [
             { key: "id", label: "ID", valueType: "string", editable: true },
             { key: "label", label: "Label", valueType: "string", editable: true },

@@ -156,7 +156,7 @@
 4. `expand-section` 在 section 尚未创建时会自动补模板后再展开。
 5. `ControlPanel` 根据 `panelSpec` 渲染可见 section。
 6. `ControlRenderer` 根据控件类型渲染输入器（number/select/toggle/table 等），并将用户操作实时写回 `parts`。
-7. `table` 控件优先从 `targetCollection` 自动推断列（支持 `schemaSource` 覆写），并支持 `orientationKey`（`row-major`/`column-major`）；缺失时会补默认 `row-major`。
+7. `table` 控件优先从 `targetCollection` 自动推断列（支持 `schemaSource` 覆写），统一按 `row-major` 渲染，不再使用 orientation 相关配置。
 
 结论：即使初始 `panelSpec.sections = []`，只要收到有效意图，也会通过 `create-section-with-controls / ensure-task-controls` 动态生成右侧控件。
 
@@ -182,4 +182,3 @@ PromptBar.submit
     -> parts/panelSpec reactive update
       -> CodePanel / ChartPreview / ControlPanel rerender
 ```
-
