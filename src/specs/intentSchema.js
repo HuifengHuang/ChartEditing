@@ -1,14 +1,10 @@
 /**
  * @typedef {Object} IntentSpec
- * @property {string} intentId
- * @property {"style" | "data"} intentType
- * @property {"aspect_ratio" | "color_theme" | "element_edit" | "legend_edit"} task
- * @property {string[]} target
- * @property {"update" | "add" | "remove" | "show_panel"} action
- * @property {Record<string, any>} parameters
- * @property {boolean} needPanel
- * @property {"create" | "extend" | "reuse"} panelStrategy
- * @property {boolean=} detailRequested
+ * @property {string} User_prompt
+ * @property {"data" | "style" | "other"} target
+ * @property {"add" | "remove" | "update"} action
+ * @property {boolean} expand
+ * @property {Record<string, "Recommendation" | "Preset" | "None">} parameters
  */
 
 /**
@@ -37,23 +33,17 @@
  * }>} panelUpdates
  */
 
-export const SUPPORTED_INTENT_TASKS = [
-  "aspect_ratio",
-  "color_theme",
-  "element_edit",
-  "legend_edit",
-];
+export const INTENT_TARGETS = ["data", "style", "other"];
+export const INTENT_ACTIONS = ["add", "remove", "update"];
+export const INTENT_PARAMETER_VALUES = ["Recommendation", "Preset", "None"];
 
 export function createDefaultIntentSpec() {
   return {
-    intentId: `intent_${Date.now()}`,
-    intentType: "style",
-    task: "color_theme",
-    target: ["style"],
-    action: "show_panel",
+    User_prompt: "",
+    target: "style",
+    action: "update",
+    expand: false,
     parameters: {},
-    needPanel: true,
-    panelStrategy: "reuse",
-    detailRequested: false,
   };
 }
+

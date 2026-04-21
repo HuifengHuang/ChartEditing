@@ -45,7 +45,11 @@ async function parseIntentWithYizhanProxy({ prompt, context, imageBase64 }) {
       throw new Error("LLM response is empty.");
     }
     const parsed = parseIntentResponse(rawText);
-    return validateIntentSpec(parsed);
+    const validated = validateIntentSpec(parsed);
+    return {
+      ...validated,
+      User_prompt: validated.User_prompt || String(prompt || ""),
+    };
   } finally {
     timeout.clear();
   }

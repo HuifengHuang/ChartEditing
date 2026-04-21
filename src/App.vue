@@ -50,27 +50,13 @@ function pushToast(message, type = "info", timeoutMs = 2800) {
 }
 
 function buildIntentContext() {
-  const sections = panelSpec.value?.sections || [];
-  const sectionSummary = sections.map((section) => ({
-    sectionId: section.sectionId,
-    priority: section.priority,
-    controlIds: (section.controls || []).map((control) => control.id),
-  }));
-
   return {
     chartType: "mirrored horizontal bar chart",
     fields: ["month", "waitingArea", "corridor"],
-    supportedTasks: [
-      "aspect_ratio",
-      "color_theme",
-      "element_edit",
-      "legend_edit",
-    ],
-    panelSummary: {
-      sectionCount: sections.length,
-      sections: sectionSummary,
-      expandedSections: panelSpec.value?.uiState?.expandedSections || [],
-      highlightedSectionId: panelSpec.value?.uiState?.highlightedSectionId || null,
+    supportedIntent: {
+      target: ["data", "style", "other"],
+      action: ["add", "remove", "update"],
+      parameterValues: ["Recommendation", "Preset", "None"],
     },
   };
 }
@@ -146,7 +132,7 @@ async function handlePromptSubmit(payload) {
     const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
     parts.value = nextState.parts;
     panelSpec.value = nextState.panelSpec;
-    pushToast(`Last Intent: ${intent.task} (${intent.action})`, "success");
+    pushToast(`Last Intent: ${intent.target} (${intent.action})`, "success");
   } catch (error) {
     pushToast(error?.message || "Intent parsing failed.", "error", 4200);
   } finally {

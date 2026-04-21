@@ -3,6 +3,69 @@ import {
   getTaskPrimarySectionId,
 } from "../specs/taskControlRegistry.js";
 
+function asObject(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+}
+
+function normalizeParameterKeys(parameters) {
+  return Object.keys(asObject(parameters)).map((key) => key.toLowerCase());
+}
+
+function hasAnyKey(keys, patterns) {
+  return patterns.some((pattern) => keys.some((key) => key.includes(pattern)));
+}
+
+function mapIntentToLegacy(intentSpec) {
+  const intent = asObject(intentSpec);
+  const legacyTask = String(intent.task || "").trim();
+  if (legacyTask) {
+    return {
+      task: legacyTask,
+      action: String(intent.action || "update").toLowerCase() === "show_panel" ? "update" : String(intent.action || "update"),
+      detailRequested: Boolean(intent.detailRequested ?? intent.expand),
+      parameters: asObject(intent.parameters),
+    };
+  }
+
+  const target = String(intent.target || "style").toLowerCase();
+  const action = String(intent.action || "update").toLowerCase();
+  const parameters = asObject(intent.parameters);
+  const keys = normalizeParameterKeys(parameters);
+
+  const isInput = keys.includes("input") && String(parameters.Input || parameters.input || "").toLowerCase() === "none";
+  if (target === "other" && isInput) {
+    return {
+      task: "other_input",
+      action: "add",
+      detailRequested: false,
+      parameters,
+    };
+  }
+
+  let task = "color_theme";
+  if (
+    target === "data" ||
+    action === "add" ||
+    action === "remove" ||
+    hasAnyKey(keys, ["data", "table", "row", "month"])
+  ) {
+    task = "element_edit";
+  } else if (hasAnyKey(keys, ["legend"])) {
+    task = "legend_edit";
+  } else if (hasAnyKey(keys, ["color", "theme", "palette", "style"])) {
+    task = "color_theme";
+  } else if (hasAnyKey(keys, ["width", "height", "aspect", "ratio", "layout"])) {
+    task = "aspect_ratio";
+  }
+
+  return {
+    task,
+    action: action === "add" || action === "remove" || action === "update" ? action : "update",
+    detailRequested: Boolean(intent.expand),
+    parameters,
+  };
+}
+
 function hasSection(panelSpec, sectionId) {
   return (panelSpec?.sections || []).some((section) => section.sectionId === sectionId);
 }
@@ -151,41 +214,49 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
     sourceDataUpdates: [],
     panelUpdates: [],
   };
+  const normalizedIntent = mapIntentToLegacy(intentSpec);
 
-  if (intentSpec.task === "aspect_ratio") {
+  if (normalizedIntent.task === "other_input") {
+    return plan;
+  }
+
+  if (normalizedIntent.task === "aspect_ratio") {
     ensureTaskPanel(plan, currentPanelSpec, "aspect_ratio");
-    if (isAction(intentSpec, "update") && (intentSpec.parameters?.aspectRatio || intentSpec.parameters?.sizeHint)) {
-      plan.sourceDataUpdates.push(...computeAspectRatioUpdates(intentSpec.parameters, currentParts));
+    if (
+      isAction(normalizedIntent, "update") &&
+      (normalizedIntent.parameters?.aspectRatio || normalizedIntent.parameters?.sizeHint)
+    ) {
+      plan.sourceDataUpdates.push(...computeAspectRatioUpdates(normalizedIntent.parameters, currentParts));
     }
-    if (intentSpec.detailRequested || intentSpec.panelStrategy === "extend") {
+    if (normalizedIntent.detailRequested) {
       expandTaskDetails(plan, "aspect_ratio");
     }
     return plan;
   }
 
-  if (intentSpec.task === "color_theme") {
+  if (normalizedIntent.task === "color_theme") {
     ensureTaskPanel(plan, currentPanelSpec, "color_theme");
     const patch =
-      intentSpec.parameters?.applyPreset === true
-        ? createThemePatchByHint(intentSpec.parameters?.themeHint)
+      normalizedIntent.parameters?.applyPreset === true
+        ? createThemePatchByHint(normalizedIntent.parameters?.themeHint)
         : null;
     if (patch) {
       plan.sourceDataUpdates.push({ type: "patch", patch });
     }
-    if (intentSpec.detailRequested || intentSpec.panelStrategy === "extend") {
+    if (normalizedIntent.detailRequested) {
       expandTaskDetails(plan, "color_theme");
     }
     return plan;
   }
 
-  if (intentSpec.task === "element_edit") {
+  if (normalizedIntent.task === "element_edit") {
     ensureTaskPanel(plan, currentPanelSpec, "element_edit");
 
-    if (isAction(intentSpec, "add")) {
+    if (isAction(normalizedIntent, "add")) {
       plan.sourceDataUpdates.push({
         type: "add",
         targetCollection: "source_data.data",
-        value: createAddedDataRow(intentSpec.parameters || {}),
+        value: createAddedDataRow(normalizedIntent.parameters || {}),
       });
       const spacingUpdate = maybeCreateAutoSpacingUpdate(currentParts, 1);
       if (spacingUpdate) {
@@ -193,22 +264,37 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
       }
     }
 
-    if (isAction(intentSpec, "remove") && intentSpec.parameters?.month) {
+    if (isAction(normalizedIntent, "remove") && normalizedIntent.parameters?.month) {
       plan.sourceDataUpdates.push({
         type: "remove",
         targetCollection: "source_data.data",
         matcher: {
           rowKey: "month",
-          value: intentSpec.parameters.month,
+          value: normalizedIntent.parameters.month,
         },
       });
       const spacingUpdate = maybeCreateAutoSpacingUpdate(currentParts, -1);
       if (spacingUpdate) {
         plan.sourceDataUpdates.push(spacingUpdate);
       }
+    } else if (isAction(normalizedIntent, "remove")) {
+      const rows = currentParts?.source_data?.data || [];
+      if (rows.length) {
+        plan.sourceDataUpdates.push({
+          type: "remove",
+          targetCollection: "source_data.data",
+          matcher: {
+            index: rows.length - 1,
+          },
+        });
+        const spacingUpdate = maybeCreateAutoSpacingUpdate(currentParts, -1);
+        if (spacingUpdate) {
+          plan.sourceDataUpdates.push(spacingUpdate);
+        }
+      }
     }
 
-    if (intentSpec.detailRequested || intentSpec.panelStrategy === "extend") {
+    if (normalizedIntent.detailRequested) {
       plan.sourceDataUpdates.push({
         type: "set",
         path: "source_data.layout.fixedChartSize",
@@ -220,27 +306,27 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
     return plan;
   }
 
-  if (intentSpec.task === "legend_edit") {
+  if (normalizedIntent.task === "legend_edit") {
     ensureTaskPanel(plan, currentPanelSpec, "legend_edit");
 
-    if (intentSpec.parameters?.direction) {
+    if (normalizedIntent.parameters?.direction) {
       plan.sourceDataUpdates.push({
         type: "set",
         path: "source_data.legend.legendDirection",
-        value: intentSpec.parameters.direction,
+        value: normalizedIntent.parameters.direction,
       });
     }
 
-    if (intentSpec.parameters?.fontDelta) {
+    if (normalizedIntent.parameters?.fontDelta) {
       const current = Number(currentParts?.source_data?.legend?.legendFontSize) || 12;
       plan.sourceDataUpdates.push({
         type: "set",
         path: "source_data.legend.legendFontSize",
-        value: clamp(current + Number(intentSpec.parameters.fontDelta), 9, 30),
+        value: clamp(current + Number(normalizedIntent.parameters.fontDelta), 9, 30),
       });
     }
 
-    if (intentSpec.detailRequested || intentSpec.parameters?.editItems || intentSpec.panelStrategy === "extend") {
+    if (normalizedIntent.detailRequested || normalizedIntent.parameters?.editItems) {
       expandTaskDetails(plan, "legend_edit");
     }
 
