@@ -39,11 +39,26 @@ function applySourceUpdate(parts, update) {
 
 export function applyUpdatePlan(parts, panelSpec, updatePlan, extractionResult = null) {
   const nextParts = safeClone(parts);
-  if (extractionResult?.sourceData && typeof extractionResult.sourceData === "object") {
-    nextParts.source_data = safeClone(extractionResult.sourceData);
+
+  const latestSourceData =
+    extractionResult?.updatedSourceData && typeof extractionResult.updatedSourceData === "object"
+      ? extractionResult.updatedSourceData
+      : extractionResult?.sourceData && typeof extractionResult.sourceData === "object"
+        ? extractionResult.sourceData
+        : null;
+
+  const latestRenderCode =
+    typeof extractionResult?.updatedRenderCode === "string"
+      ? extractionResult.updatedRenderCode
+      : typeof extractionResult?.renderCode === "string"
+        ? extractionResult.renderCode
+        : null;
+
+  if (latestSourceData) {
+    nextParts.source_data = safeClone(latestSourceData);
   }
-  if (typeof extractionResult?.renderCode === "string") {
-    nextParts.render_code = extractionResult.renderCode;
+  if (latestRenderCode !== null) {
+    nextParts.render_code = latestRenderCode;
   }
 
   const sourceDataUpdates = updatePlan?.sourceDataUpdates || [];

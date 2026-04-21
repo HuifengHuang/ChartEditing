@@ -103,6 +103,25 @@ function safeClone(value) {
   }
 }
 
+function ensureSectionForInsert(nextPanelSpec, update) {
+  const direct = findSection(nextPanelSpec, update.sectionId);
+  if (direct) {
+    return direct;
+  }
+
+  const template = getSectionTemplateById(update.sectionId);
+  if (template) {
+    return ensureSection(nextPanelSpec, template);
+  }
+
+  return ensureSection(nextPanelSpec, {
+    sectionId: update.sectionId,
+    title: update.sectionId,
+    priority: "secondary",
+    controls: [],
+  });
+}
+
 export function updatePanelSpec(currentPanelSpec, panelUpdates) {
   const nextPanelSpec = safeClone(currentPanelSpec);
   ensureSections(nextPanelSpec);
@@ -148,15 +167,21 @@ export function updatePanelSpec(currentPanelSpec, panelUpdates) {
       if (!update.payload || !update.payload.sectionId) {
         return;
       }
-      ensureSection(nextPanelSpec, update.payload);
+      const section = ensureSection(nextPanelSpec, update.payload);
+      (update.payload.controls || []).forEach((control) => {
+        const inserted = appendControl(section, control);
+        if (inserted) {
+          maybeApplyImpactControls(nextPanelSpec, control);
+        }
+      });
       return;
     }
 
     if (update.type === "insert-control") {
-      const section = findSection(nextPanelSpec, update.sectionId);
-      if (!section || !update.payload) {
+      if (!update.sectionId || !update.payload) {
         return;
       }
+      const section = ensureSectionForInsert(nextPanelSpec, update);
       const inserted = appendControl(section, update.payload);
       if (inserted) {
         maybeApplyImpactControls(nextPanelSpec, update.payload);

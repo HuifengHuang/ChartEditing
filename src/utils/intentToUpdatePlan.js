@@ -1,233 +1,57 @@
-import {
-  getTaskDetailSectionIds,
-  getTaskPrimarySectionId,
-} from "../specs/taskControlRegistry.js";
+import { resolveParameterSection } from "../specs/parameterSectionRegistry.js";
 
 function asObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
-function normalizeParameterKeys(parameters) {
-  return Object.keys(asObject(parameters)).map((key) => key.toLowerCase());
+function asArray(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
 }
 
-function hasAnyKey(keys, patterns) {
-  return patterns.some((pattern) => keys.some((key) => key.includes(pattern)));
-}
-
-function mapIntentToLegacy(intentSpec, extractionMap = {}) {
-  const intent = asObject(intentSpec);
-  const legacyTask = String(intent.task || "").trim();
-  if (legacyTask) {
-    return {
-      task: legacyTask,
-      action: String(intent.action || "update").toLowerCase() === "show_panel" ? "update" : String(intent.action || "update"),
-      detailRequested: Boolean(intent.detailRequested ?? intent.expand),
-      parameters: asObject(intent.parameters),
-    };
-  }
-
-  const target = String(intent.target || "style").toLowerCase();
-  const action = String(intent.action || "update").toLowerCase();
-  const parameters = asObject(intent.parameters);
-  const keys = normalizeParameterKeys(parameters);
-  const extractionKeys = Object.keys(asObject(extractionMap)).map((key) => String(key || "").toLowerCase());
-  const allKeys = [...keys, ...extractionKeys];
-
-  const isInput = allKeys.includes("input") && String(parameters.Input || parameters.input || "").toLowerCase() === "none";
-  if (target === "other" && isInput) {
-    return {
-      task: "other_input",
-      action: "add",
-      detailRequested: false,
-      parameters,
-    };
-  }
-
-  let task = "color_theme";
-  if (
-    target === "data" ||
-    action === "add" ||
-    action === "remove" ||
-    hasAnyKey(allKeys, ["data", "table", "row", "month"])
-  ) {
-    task = "element_edit";
-  } else if (hasAnyKey(allKeys, ["triangle"])) {
-    task = "triangle_style";
-  } else if (hasAnyKey(allKeys, ["legend"])) {
-    task = "legend_edit";
-  } else if (hasAnyKey(allKeys, ["color", "theme", "palette", "style"])) {
-    task = "color_theme";
-  } else if (hasAnyKey(allKeys, ["width", "height", "aspect", "ratio", "layout"])) {
-    task = "aspect_ratio";
-  }
-
-  return {
-    task,
-    action: action === "add" || action === "remove" || action === "update" ? action : "update",
-    detailRequested: Boolean(intent.expand),
-    parameters,
-  };
-}
-
-function hasSection(panelSpec, sectionId) {
-  return (panelSpec?.sections || []).some((section) => section.sectionId === sectionId);
-}
-
-function ensureTaskPanel(plan, currentPanelSpec, task, { highlight = true } = {}) {
-  const sectionId = getTaskPrimarySectionId(task);
-  if (hasSection(currentPanelSpec, sectionId)) {
-    plan.panelUpdates.push({ type: "ensure-task-controls", task });
-  } else {
-    plan.panelUpdates.push({ type: "create-section-with-controls", task });
-  }
-  if (highlight) {
-    plan.panelUpdates.push({ type: "highlight-section", sectionId });
+function safeClone(value) {
+  try {
+    return structuredClone(value);
+  } catch (error) {
+    return JSON.parse(JSON.stringify(value));
   }
 }
 
-function expandTaskDetails(plan, task) {
-  const detailSectionIds = getTaskDetailSectionIds(task);
-  detailSectionIds.forEach((sectionId) => {
-    plan.panelUpdates.push({ type: "expand-section", sectionId });
-  });
+function normalizePath(path) {
+  const text = String(path || "").trim();
+  if (!text) {
+    return "";
+  }
+  return text.startsWith("source_data.") ? text : `source_data.${text}`;
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function computeAspectRatioUpdates(parameters, currentParts) {
-  const currentLayout = currentParts?.source_data?.layout || {};
-  const currentWidth = Number(currentLayout.svgWidth) || 420;
-  const currentHeight = Number(currentLayout.svgHeight) || 520;
-  const currentRatio = currentWidth > 0 ? currentHeight / currentWidth : 1.2;
-  const targetRatio = Number(parameters.aspectRatio) > 0 ? Number(parameters.aspectRatio) : currentRatio;
-
-  let nextWidth = currentWidth;
-  let nextHeight = Math.round(nextWidth * targetRatio);
-
-  if (parameters.sizeHint === "wider") {
-    nextWidth = currentWidth + 60;
-    nextHeight = Math.round(nextWidth * targetRatio);
+function toLabel(text) {
+  const raw = String(text || "").trim();
+  if (!raw) {
+    return "Field";
   }
-  if (parameters.sizeHint === "taller") {
-    nextHeight = currentHeight + 60;
-    nextWidth = Math.round(nextHeight / targetRatio);
-  }
-
-  nextWidth = clamp(nextWidth, 280, 1200);
-  nextHeight = clamp(nextHeight, 320, 1200);
-
-  const oldHeight = currentHeight || 1;
-  const scaleY = nextHeight / oldHeight;
-  const nextChartBottom = Math.round((Number(currentLayout.chartBottom) || 382) * scaleY);
-  const nextTitleY = Math.round((Number(currentLayout.titleY) || 438) * scaleY);
-  const nextSubtitleY = Math.round((Number(currentLayout.subtitleY) || 488) * scaleY);
-
-  return [
-    { type: "set", path: "source_data.layout.aspectRatio", value: targetRatio },
-    { type: "set", path: "source_data.layout.svgWidth", value: nextWidth },
-    { type: "set", path: "source_data.layout.svgHeight", value: nextHeight },
-    { type: "set", path: "source_data.layout.chartBottom", value: nextChartBottom },
-    { type: "set", path: "source_data.layout.titleY", value: nextTitleY },
-    { type: "set", path: "source_data.layout.subtitleY", value: nextSubtitleY },
-    { type: "set", path: "source_data.meta.aspectRatioPreset", value: "custom" },
-  ];
-}
-
-function createThemePatchByHint(themeHint) {
-  if (themeHint === "cool") {
-    return {
-      "source_data.style.waitingAreaColor": "#2563eb",
-      "source_data.style.corridorColor": "#38bdf8",
-      "source_data.style.titleColor": "#0f172a",
-      "source_data.style.subtitleColor": "#334155",
-      "source_data.style.textMidColor": "#475569",
-      "source_data.style.textLightColor": "#64748b",
-    };
-  }
-
-  if (themeHint === "warm") {
-    return {
-      "source_data.style.waitingAreaColor": "#c75b4e",
-      "source_data.style.corridorColor": "#efc45a",
-      "source_data.style.titleColor": "#78350f",
-      "source_data.style.subtitleColor": "#92400e",
-      "source_data.style.textMidColor": "#7c2d12",
-      "source_data.style.textLightColor": "#9a3412",
-    };
-  }
-
-  if (themeHint === "soft") {
-    return {
-      "source_data.style.waitingAreaColor": "#d97795",
-      "source_data.style.corridorColor": "#f9c66e",
-      "source_data.style.titleColor": "#4b5563",
-      "source_data.style.subtitleColor": "#6b7280",
-      "source_data.style.textMidColor": "#6b7280",
-      "source_data.style.textLightColor": "#9ca3af",
-    };
-  }
-
-  return null;
-}
-
-function parseMonthAsIndex(monthText) {
-  const match = String(monthText || "").match(/(20\d{2})-(0[1-9]|1[0-2])/);
-  if (!match) {
-    return 1;
-  }
-  return Number(match[2]);
-}
-
-function createAddedDataRow(parameters) {
-  const month = parameters.month || "2024-01";
-  const monthIndex = parseMonthAsIndex(month);
-  const waitingDefault = 7 + monthIndex / 10;
-  const corridorDefault = 6.6 + monthIndex / 10;
-  return {
-    month,
-    waitingArea: Number(parameters.waitingArea ?? waitingDefault).toFixed(1) * 1,
-    corridor: Number(parameters.corridor ?? corridorDefault).toFixed(1) * 1,
-  };
-}
-
-function maybeCreateAutoSpacingUpdate(currentParts, deltaCount) {
-  const layout = currentParts?.source_data?.layout || {};
-  const fixed = Boolean(layout.fixedChartSize);
-  if (fixed) {
-    return null;
-  }
-
-  const currentData = currentParts?.source_data?.data || [];
-  const nextCount = Math.max(1, currentData.length + deltaCount);
-  const top = Number(layout.chartTop) || 54;
-  const bottom = Number(layout.chartBottom) || 382;
-  const span = Math.max(40, bottom - top);
-  const rowStep = Number((span / nextCount).toFixed(2));
-  return { type: "set", path: "source_data.layout.rowStep", value: rowStep };
-}
-
-function isAction(intentSpec, action) {
-  return String(intentSpec?.action || "") === action;
+  return raw
+    .replace(/[_.-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function inferControlType(bindingType) {
-  if (bindingType === "number") {
+  const type = String(bindingType || "").toLowerCase();
+  if (type === "number") {
     return "number";
   }
-  if (bindingType === "color") {
+  if (type === "color") {
     return "color";
   }
-  if (bindingType === "bool") {
+  if (type === "bool") {
     return "toggle";
   }
   return "text";
 }
 
 function inferValueType(controlType) {
-  if (controlType === "number") {
+  if (controlType === "number" || controlType === "slider") {
     return "number";
   }
   if (controlType === "color") {
@@ -239,6 +63,18 @@ function inferValueType(controlType) {
   return "string";
 }
 
+function createSection(panelUpdates, sectionId, title, priority = "primary") {
+  panelUpdates.push({
+    type: "create-section",
+    payload: {
+      sectionId,
+      title,
+      priority,
+      controls: [],
+    },
+  });
+}
+
 function createBindingControl(binding, prefix) {
   const name = String(binding?.name || "").trim();
   if (!name) {
@@ -246,197 +82,305 @@ function createBindingControl(binding, prefix) {
   }
   const controlType = inferControlType(binding?.type);
   const valueType = inferValueType(controlType);
-  const lastName = name.split(".").pop() || name;
+  const safeName = name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
   return {
-    id: `${prefix}_${name.replace(/[^a-zA-Z0-9_]/g, "_")}`.toLowerCase(),
-    label: lastName,
+    id: `${prefix}_${safeName}`,
+    label: toLabel(name.split(".").pop() || name),
     controlType,
     operationType: "update",
     bindingMode: "single",
-    bind: name.startsWith("source_data.") ? name : `source_data.${name}`,
+    bind: normalizePath(name),
     valueType,
   };
 }
 
-function appendBindingSection(plan, sectionId, sectionTitle, bindings, prefix) {
-  const list = Array.isArray(bindings) ? bindings : [];
-  if (!list.length) {
-    return;
+function createRecommendationControl(parameterName, recommendation) {
+  const presets = asArray(recommendation)
+    .map((item, index) => {
+      const preset = asObject(item);
+      const rawValues = asObject(preset.values);
+      const patch = {};
+      Object.entries(rawValues).forEach(([path, value]) => {
+        patch[normalizePath(path)] = value;
+      });
+      return {
+        id: String(preset.id || `${parameterName}_preset_${index + 1}`),
+        label: String(preset.label || `Preset ${index + 1}`),
+        patch,
+      };
+    })
+    .filter((preset) => Object.keys(preset.patch).length > 0);
+
+  if (!presets.length) {
+    return null;
   }
-  plan.panelUpdates.push({
-    type: "create-section",
-    payload: {
-      sectionId,
-      title: sectionTitle,
-      priority: "primary",
-      controls: [],
-    },
-  });
-  list.forEach((binding) => {
-    const control = createBindingControl(binding, prefix);
-    if (!control) {
+
+  return {
+    id: `${parameterName.toLowerCase()}_preset_select`,
+    label: `${toLabel(parameterName)} Presets`,
+    controlType: "preset-select",
+    operationType: "update",
+    bindingMode: "preset",
+    presetOptions: presets,
+  };
+}
+
+function inferValueTypeFromSample(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return "number";
+  }
+  if (typeof value === "boolean") {
+    return "boolean";
+  }
+  if (typeof value === "string" && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())) {
+    return "color";
+  }
+  return "string";
+}
+
+function buildTableSchema(rows) {
+  const list = asArray(rows);
+  const sample = asObject(list[0]);
+  const keys = Object.keys(sample);
+  const finalKeys = keys.length ? keys : ["month", "waitingArea", "corridor"];
+  return finalKeys.map((key) => ({
+    key,
+    label: toLabel(key),
+    valueType: inferValueTypeFromSample(sample[key]),
+    editable: true,
+  }));
+}
+
+function buildItemSchema(columns) {
+  const schema = {};
+  columns.forEach((column) => {
+    if (!column?.key) {
       return;
     }
-    plan.panelUpdates.push({
+    schema[column.key] = column.valueType === "number" ? "number" : column.valueType === "boolean" ? "boolean" : "string";
+  });
+  return schema;
+}
+
+function createDataTableControl(parameterName, rows) {
+  const schema = buildTableSchema(rows);
+  return {
+    id: `${parameterName.toLowerCase()}_data_table`,
+    label: "Data Table",
+    controlType: "table",
+    operationType: "update",
+    bindingMode: "collection",
+    targetCollection: "source_data.data",
+    rowKey: schema.find((column) => String(column.key).toLowerCase().includes("month"))?.key || schema[0]?.key || "id",
+    rowActions: ["add", "remove"],
+    schemaSource: "mixed",
+    tableSchema: schema,
+    itemSchema: buildItemSchema(schema),
+    initialValue: asObject(asArray(rows)[0]),
+  };
+}
+
+function createFixedChartSizeControl() {
+  return {
+    id: "fixed_chart_size",
+    label: "Fixed Chart Size",
+    controlType: "toggle",
+    operationType: "update",
+    bindingMode: "single",
+    bind: "source_data.layout.fixedChartSize",
+    valueType: "boolean",
+  };
+}
+
+function dedupeControls(controls) {
+  const map = new Map();
+  controls.forEach((control) => {
+    if (!control?.id) {
+      return;
+    }
+    map.set(control.id, control);
+  });
+  return Array.from(map.values());
+}
+
+function selectAffectedByPolicy(affected, policy, intentTarget) {
+  const list = asArray(affected);
+  if (policy === "auto-adjust") {
+    return [];
+  }
+  if (policy === "show-affected-controls") {
+    return list;
+  }
+  if (policy === "mixed") {
+    if (String(intentTarget || "").toLowerCase() === "data") {
+      return list;
+    }
+    return list.slice(0, 3);
+  }
+  if (String(intentTarget || "").toLowerCase() === "data") {
+    return list;
+  }
+  return list.slice(0, 3);
+}
+
+function appendControls(panelUpdates, sectionId, controls) {
+  dedupeControls(controls).forEach((control) => {
+    panelUpdates.push({
       type: "insert-control",
       sectionId,
       payload: control,
     });
   });
-  plan.panelUpdates.push({
-    type: "highlight-section",
-    sectionId,
+}
+
+function mapExtractionEntryToControls(entry, parameterName, context) {
+  const extractionEntry = asObject(entry);
+  const primaryControls = [];
+  const detailControls = [];
+
+  const recommendationControl = createRecommendationControl(parameterName, extractionEntry.recommendation);
+  if (recommendationControl) {
+    primaryControls.push(recommendationControl);
+  }
+
+  asArray(extractionEntry.primaryBindings).forEach((binding) => {
+    const control = createBindingControl(binding, `${parameterName}_primary`);
+    if (control) {
+      primaryControls.push(control);
+    }
+  });
+
+  if (context.expandRequested) {
+    asArray(extractionEntry.expand).forEach((binding) => {
+      const control = createBindingControl(binding, `${parameterName}_expand`);
+      if (control) {
+        detailControls.push(control);
+      }
+    });
+  }
+
+  const affectedForControls = selectAffectedByPolicy(
+    extractionEntry.affected,
+    context.impactPolicy,
+    context.intentTarget
+  );
+  affectedForControls.forEach((binding) => {
+    const control = createBindingControl(binding, `${parameterName}_affected`);
+    if (control) {
+      detailControls.push(control);
+    }
+  });
+
+  if (Array.isArray(extractionEntry.data)) {
+    primaryControls.push(createDataTableControl(parameterName, extractionEntry.data));
+    primaryControls.push(createFixedChartSizeControl());
+  }
+
+  if (Array.isArray(extractionEntry.input)) {
+    extractionEntry.input.forEach((binding) => {
+      const normalizedBinding = {
+        ...asObject(binding),
+        name: `input.${String(binding?.name || "").trim()}`,
+      };
+      const control = createBindingControl(normalizedBinding, `${parameterName}_input`);
+      if (control) {
+        primaryControls.push(control);
+      }
+    });
+  }
+
+  return {
+    primaryControls: dedupeControls(primaryControls),
+    detailControls: dedupeControls(detailControls),
+  };
+}
+
+function collectSourceDataUpdates(plan, extractionResult, extractionMap) {
+  const updatedSourceData = asObject(extractionResult?.updatedSourceData, asObject(extractionResult?.sourceData));
+  if (Object.keys(updatedSourceData).length) {
+    plan.sourceDataUpdates.push({
+      type: "patch",
+      patch: {
+        source_data: safeClone(updatedSourceData),
+      },
+    });
+  }
+
+  Object.values(asObject(extractionMap)).forEach((entry) => {
+    const extractionEntry = asObject(entry);
+
+    if (Array.isArray(extractionEntry.data)) {
+      plan.sourceDataUpdates.push({
+        type: "set",
+        path: "source_data.data",
+        value: safeClone(extractionEntry.data),
+      });
+    }
+
+    if (Array.isArray(extractionEntry.input)) {
+      extractionEntry.input.forEach((item) => {
+        const name = String(item?.name || "").trim();
+        if (!name) {
+          return;
+        }
+        plan.sourceDataUpdates.push({
+          type: "set",
+          path: normalizePath(`input.${name}`),
+          value: Number(item?.value) || 0,
+        });
+      });
+    }
+  });
+}
+
+function appendPanelUpdates(plan, intentSpec, extractionMap) {
+  const intent = asObject(intentSpec);
+  const expandRequested = Boolean(intent.expand);
+  const target = String(intent.target || "style").toLowerCase();
+
+  Object.entries(asObject(extractionMap)).forEach(([parameterName, entry]) => {
+    const sectionConfig = resolveParameterSection(parameterName, target);
+
+    createSection(plan.panelUpdates, sectionConfig.primarySectionId, sectionConfig.primaryTitle, "primary");
+    if (expandRequested) {
+      createSection(plan.panelUpdates, sectionConfig.detailSectionId, sectionConfig.detailTitle, "detail");
+    }
+
+    const { primaryControls, detailControls } = mapExtractionEntryToControls(entry, parameterName, {
+      impactPolicy: sectionConfig.impactPolicy,
+      expandRequested,
+      intentTarget: target,
+    });
+
+    appendControls(plan.panelUpdates, sectionConfig.primarySectionId, primaryControls);
+
+    if (detailControls.length) {
+      createSection(plan.panelUpdates, sectionConfig.detailSectionId, sectionConfig.detailTitle, "detail");
+      appendControls(plan.panelUpdates, sectionConfig.detailSectionId, detailControls);
+      plan.panelUpdates.push({
+        type: "expand-section",
+        sectionId: sectionConfig.detailSectionId,
+      });
+    }
+
+    plan.panelUpdates.push({
+      type: "highlight-section",
+      sectionId: sectionConfig.primarySectionId,
+    });
   });
 }
 
 export function intentToUpdatePlan(intentSpec, extractionResult, currentPanelSpec) {
+  void currentPanelSpec;
+
   const plan = {
     sourceDataUpdates: [],
     panelUpdates: [],
   };
+
   const extractionMap = asObject(extractionResult?.extractionMap);
-  const currentParts = {
-    source_data: extractionResult?.sourceData || {},
-  };
-  const normalizedIntent = mapIntentToLegacy(intentSpec, extractionMap);
+  collectSourceDataUpdates(plan, extractionResult, extractionMap);
+  appendPanelUpdates(plan, intentSpec, extractionMap);
 
-  if (normalizedIntent.task === "other_input") {
-    const inputEntry = extractionMap.Input || extractionMap.input || {};
-    appendBindingSection(
-      plan,
-      "upload_input_controls",
-      "Upload Input",
-      inputEntry.input || [],
-      "input"
-    );
-    return plan;
-  }
-
-  if (normalizedIntent.task === "aspect_ratio") {
-    ensureTaskPanel(plan, currentPanelSpec, "aspect_ratio");
-    if (
-      isAction(normalizedIntent, "update") &&
-      (normalizedIntent.parameters?.aspectRatio || normalizedIntent.parameters?.sizeHint)
-    ) {
-      plan.sourceDataUpdates.push(...computeAspectRatioUpdates(normalizedIntent.parameters, currentParts));
-    }
-    if (normalizedIntent.detailRequested) {
-      expandTaskDetails(plan, "aspect_ratio");
-    }
-    return plan;
-  }
-
-  if (normalizedIntent.task === "color_theme") {
-    ensureTaskPanel(plan, currentPanelSpec, "color_theme");
-    const patch =
-      normalizedIntent.parameters?.applyPreset === true
-        ? createThemePatchByHint(normalizedIntent.parameters?.themeHint)
-        : null;
-    if (patch) {
-      plan.sourceDataUpdates.push({ type: "patch", patch });
-    }
-    if (normalizedIntent.detailRequested) {
-      expandTaskDetails(plan, "color_theme");
-    }
-    return plan;
-  }
-
-  if (normalizedIntent.task === "element_edit") {
-    ensureTaskPanel(plan, currentPanelSpec, "element_edit");
-
-    if (isAction(normalizedIntent, "add")) {
-      plan.sourceDataUpdates.push({
-        type: "add",
-        targetCollection: "source_data.data",
-        value: createAddedDataRow(normalizedIntent.parameters || {}),
-      });
-      const spacingUpdate = maybeCreateAutoSpacingUpdate(currentParts, 1);
-      if (spacingUpdate) {
-        plan.sourceDataUpdates.push(spacingUpdate);
-      }
-    }
-
-    if (isAction(normalizedIntent, "remove") && normalizedIntent.parameters?.month) {
-      plan.sourceDataUpdates.push({
-        type: "remove",
-        targetCollection: "source_data.data",
-        matcher: {
-          rowKey: "month",
-          value: normalizedIntent.parameters.month,
-        },
-      });
-      const spacingUpdate = maybeCreateAutoSpacingUpdate(currentParts, -1);
-      if (spacingUpdate) {
-        plan.sourceDataUpdates.push(spacingUpdate);
-      }
-    } else if (isAction(normalizedIntent, "remove")) {
-      const rows = currentParts?.source_data?.data || [];
-      if (rows.length) {
-        plan.sourceDataUpdates.push({
-          type: "remove",
-          targetCollection: "source_data.data",
-          matcher: {
-            index: rows.length - 1,
-          },
-        });
-        const spacingUpdate = maybeCreateAutoSpacingUpdate(currentParts, -1);
-        if (spacingUpdate) {
-          plan.sourceDataUpdates.push(spacingUpdate);
-        }
-      }
-    }
-
-    if (normalizedIntent.detailRequested) {
-      plan.sourceDataUpdates.push({
-        type: "set",
-        path: "source_data.layout.fixedChartSize",
-        value: false,
-      });
-      expandTaskDetails(plan, "element_edit");
-    }
-
-    return plan;
-  }
-
-  if (normalizedIntent.task === "legend_edit") {
-    ensureTaskPanel(plan, currentPanelSpec, "legend_edit");
-
-    if (normalizedIntent.parameters?.direction) {
-      plan.sourceDataUpdates.push({
-        type: "set",
-        path: "source_data.legend.legendDirection",
-        value: normalizedIntent.parameters.direction,
-      });
-    }
-
-    if (normalizedIntent.parameters?.fontDelta) {
-      const current = Number(currentParts?.source_data?.legend?.legendFontSize) || 12;
-      plan.sourceDataUpdates.push({
-        type: "set",
-        path: "source_data.legend.legendFontSize",
-        value: clamp(current + Number(normalizedIntent.parameters.fontDelta), 9, 30),
-      });
-    }
-
-    if (normalizedIntent.detailRequested || normalizedIntent.parameters?.editItems) {
-      expandTaskDetails(plan, "legend_edit");
-    }
-
-    return plan;
-  }
-
-  if (normalizedIntent.task === "triangle_style") {
-    const triangleEntry = extractionMap.triangle_style || extractionMap.triangle || {};
-    appendBindingSection(
-      plan,
-      "triangle_style",
-      "Triangle Style",
-      triangleEntry.primaryBindings || [],
-      "triangle"
-    );
-    return plan;
-  }
-
-  ensureTaskPanel(plan, currentPanelSpec, "color_theme");
   return plan;
 }
