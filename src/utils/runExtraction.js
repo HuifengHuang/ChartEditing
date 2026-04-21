@@ -1,5 +1,6 @@
 import { getValueByPath, setValueByPath } from "./pathUtils.js";
 import { validateExtractionResult } from "./extractionResultValidator.js";
+import { runExtractionLLM } from "../llm/runExtractionLLM.js";
 
 function asObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
@@ -284,10 +285,7 @@ function ensureTriangleStyleExtraction(sourceData, renderCode, extractionMap, bi
     recommendation: recommendations,
     primaryBindings: primaryBindings.map((binding) => ({
       ...binding,
-      value:
-        binding.type === "number"
-          ? recommendations.map((item) => item.values[binding.name])
-          : recommendations.map((item) => item.values[binding.name]),
+      value: recommendations.map((item) => item.values[binding.name]),
     })),
   };
   bindingMap.triangle_style = primaryBindings.map((binding) => binding.name);
@@ -313,8 +311,6 @@ function ensureDataExtraction(sourceData, extractionMap) {
 
 function ensureStyleBaselineExtraction(sourceData, renderCode, extractionMap, bindingMap, codePatches) {
   let nextRenderCode = renderCode;
-  // Baseline: width/height + theme colors should be materialized into source_data
-  // right after LLM interaction, even if parameters are vague.
   nextRenderCode = ensureSizeExtraction(
     sourceData,
     nextRenderCode,
@@ -327,7 +323,7 @@ function ensureStyleBaselineExtraction(sourceData, renderCode, extractionMap, bi
   return nextRenderCode;
 }
 
-export function runExtraction(intent, parts) {
+function runExtractionLocal(intent, parts) {
   const sourceData = safeClone(parts?.source_data || {});
   let renderCode = String(parts?.render_code || "");
   const parameters = asObject(intent?.parameters);
@@ -397,8 +393,6 @@ export function runExtraction(intent, parts) {
     extractionMap[key] = {};
   });
 
-  // Always trigger baseline style extraction right after model interaction,
-  // so source_data fields are materialized immediately (not waiting for UI clicks).
   if (target === "style") {
     renderCode = ensureStyleBaselineExtraction(sourceData, renderCode, extractionMap, bindingMap, codePatches);
   }
@@ -417,4 +411,14 @@ export function runExtraction(intent, parts) {
     },
     parts
   );
+}
+
+export async function runExtraction(intent, parts) {
+  try {
+    const llmResult = await runExtractionLLM({ intent, parts });
+    return validateExtractionResult(llmResult, parts);
+  } catch (error) {
+    console.warn("[Extraction] LLM failed, fallback to local extraction:", error);
+    return runExtractionLocal(intent, parts);
+  }
 }

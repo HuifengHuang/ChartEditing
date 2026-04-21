@@ -129,7 +129,7 @@ async function handlePromptSubmit(payload) {
 
   try {
     const intent = await resolveIntent(prompt);
-    const extractionResult = runExtraction(intent, parts.value);
+    const extractionResult = await runExtraction(intent, parts.value);
     const updatePlan = intentToUpdatePlan(intent, extractionResult, panelSpec.value);
     const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan, extractionResult);
     parts.value = nextState.parts;

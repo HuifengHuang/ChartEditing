@@ -13,6 +13,7 @@ Optional env vars (`.env` at project root):
 
 ```bash
 VITE_INTENT_PROXY_ENDPOINT=/api/intent-parse
+VITE_EXTRACTION_PROXY_ENDPOINT=/api/extract-bindings
 VITE_INTENT_TIMEOUT_MS=30000
 ```
 

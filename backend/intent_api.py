@@ -15,8 +15,6 @@ try:
     load_dotenv(DOTENV_PATH)
 except Exception:
     DOTENV_PATH = Path(__file__).resolve().parent / ".env"
-    pass
-
 
 DEFAULT_API_URL = "https://api.shunyu.tech/v1/chat/completions"
 DEFAULT_MODEL = "qwen-vl-plus"
@@ -71,52 +69,73 @@ def call_yizhan_chat_completions(
     )
 
 
-def create_app() -> Flask:
-    app = Flask(__name__)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+def extract_raw_text(response_json: Dict[str, Any]) -> str:
+    raw_text = ""
+    try:
+        raw_content = response_json["choices"][0]["message"]["content"]
+        if isinstance(raw_content, list):
+            chunks: List[str] = []
+            for item in raw_content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    chunks.append(str(item.get("text", "")))
+                else:
+                    chunks.append(str(item))
+            raw_text = "\n".join(chunks).strip()
+        else:
+            raw_text = str(raw_content)
+    except Exception:
+        raw_text = ""
+    return raw_text
 
-    @app.post("/api/intent-parse")
-    def intent_parse():
-        body = request.get_json(silent=True) or {}
-        prompt = str(body.get("prompt", "")).strip()
-        prompt_text = str(body.get("promptText", "")).strip() or prompt
-        print("大模型提示词\n" + prompt_text)
-        image_base64 = body.get("imageBase64")
 
-        if not prompt_text:
-            return jsonify({"error": "prompt is required"}), 400
+def ensure_prompt_text(body: Dict[str, Any], fallback_key: str = "prompt") -> str:
+    prompt = str(body.get(fallback_key, "")).strip()
+    prompt_text = str(body.get("promptText", "")).strip()
+    return prompt_text or prompt
 
-        config = get_api_config()
-        if not config["api_key"]:
-            return (
-                jsonify(
-                    {
-                        "error": "YIZHAN_API_KEY is not set",
-                        "hint": "Set env var YIZHAN_API_KEY or create backend/.env based on backend/.env.example",
-                        "dotenv_path": str(DOTENV_PATH),
-                    }
-                ),
-                500,
-            )
 
-        try:
-            response = call_yizhan_chat_completions(
-                api_key=config["api_key"],
-                api_url=config["api_url"],
-                model=config["model"],
-                prompt_text=prompt_text,
-                image_base64=image_base64,
-            )
-        except requests.RequestException as exc:
-            return jsonify({"error": f"Request to Yizhan API failed: {exc}"}), 502
+def validate_api_key(config: Dict[str, str]):
+    if config["api_key"]:
+        return None
+    return (
+        jsonify(
+            {
+                "error": "YIZHAN_API_KEY is not set",
+                "hint": "Set env var YIZHAN_API_KEY or create backend/.env based on backend/.env.example",
+                "dotenv_path": str(DOTENV_PATH),
+            }
+        ),
+        500,
+    )
 
-        try:
-            response_json = response.json()
-        except ValueError:
-            return jsonify({"error": "Upstream response is not valid JSON"}), 502
 
-        if response.status_code >= 400:
-            return (
+def call_model_or_error(*, prompt_text: str, image_base64: Optional[str]):
+    config = get_api_config()
+    config_error = validate_api_key(config)
+    if config_error:
+        return None, None, config_error
+
+    try:
+        response = call_yizhan_chat_completions(
+            api_key=config["api_key"],
+            api_url=config["api_url"],
+            model=config["model"],
+            prompt_text=prompt_text,
+            image_base64=image_base64,
+        )
+    except requests.RequestException as exc:
+        return None, None, (jsonify({"error": f"Request to Yizhan API failed: {exc}"}), 502)
+
+    try:
+        response_json = response.json()
+    except ValueError:
+        return None, None, (jsonify({"error": "Upstream response is not valid JSON"}), 502)
+
+    if response.status_code >= 400:
+        return (
+            None,
+            None,
+            (
                 jsonify(
                     {
                         "error": "Yizhan API returned error",
@@ -125,25 +144,64 @@ def create_app() -> Flask:
                     }
                 ),
                 502,
-            )
+            ),
+        )
 
-        raw_text = ""
-        try:
-            raw_content = response_json["choices"][0]["message"]["content"]
-            if isinstance(raw_content, list):
-                chunks: List[str] = []
-                for item in raw_content:
-                    if isinstance(item, dict) and item.get("type") == "text":
-                        chunks.append(str(item.get("text", "")))
-                    else:
-                        chunks.append(str(item))
-                raw_text = "\n".join(chunks).strip()
-            else:
-                raw_text = str(raw_content)
-        except Exception:
-            raw_text = ""
+    raw_text = extract_raw_text(response_json)
+    return config, response_json, raw_text
 
-        print("模型返回结果\n" + raw_text)
+
+def create_app() -> Flask:
+    app = Flask(__name__)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+    @app.post("/api/intent-parse")
+    def intent_parse():
+        body = request.get_json(silent=True) or {}
+        prompt_text = ensure_prompt_text(body, fallback_key="prompt")
+        image_base64 = body.get("imageBase64")
+
+        print("提示词：" + prompt_text)
+
+        if not prompt_text:
+            return jsonify({"error": "prompt is required"}), 400
+
+        config, response_json, model_result = call_model_or_error(
+            prompt_text=prompt_text,
+            image_base64=image_base64,
+        )
+        if isinstance(model_result, tuple):
+            return model_result
+
+        raw_text = model_result
+        print("模型结果：" + raw_text)
+        return jsonify(
+            {
+                "ok": True,
+                "raw_text": raw_text,
+                "model": config["model"],
+                "upstream": response_json,
+            }
+        )
+
+    @app.post("/api/extract-bindings")
+    def extract_bindings():
+        body = request.get_json(silent=True) or {}
+        prompt_text = ensure_prompt_text(body, fallback_key="prompt")
+        print("\n[Extraction] Prompt Input:\n" + prompt_text + "\n")
+
+        if not prompt_text:
+            return jsonify({"error": "promptText is required"}), 400
+
+        config, response_json, model_result = call_model_or_error(
+            prompt_text=prompt_text,
+            image_base64=None,
+        )
+        if isinstance(model_result, tuple):
+            return model_result
+
+        raw_text = model_result
+        print("[Extraction] Model Output:\n" + raw_text + "\n")
         return jsonify(
             {
                 "ok": True,
