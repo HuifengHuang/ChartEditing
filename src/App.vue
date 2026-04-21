@@ -11,6 +11,7 @@ import {
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
 import { parseIntent as parseIntentByRule } from "./utils/parseIntent";
+import { runExtraction } from "./utils/runExtraction";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
 import { applyUpdatePlan } from "./utils/applyUpdatePlan";
 import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
@@ -128,8 +129,9 @@ async function handlePromptSubmit(payload) {
 
   try {
     const intent = await resolveIntent(prompt);
-    const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
-    const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
+    const extractionResult = runExtraction(intent, parts.value);
+    const updatePlan = intentToUpdatePlan(intent, extractionResult, panelSpec.value);
+    const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan, extractionResult);
     parts.value = nextState.parts;
     panelSpec.value = nextState.panelSpec;
     pushToast(`Last Intent: ${intent.target} (${intent.action})`, "success");

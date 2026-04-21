@@ -37,8 +37,15 @@ function applySourceUpdate(parts, update) {
   }
 }
 
-export function applyUpdatePlan(parts, panelSpec, updatePlan) {
+export function applyUpdatePlan(parts, panelSpec, updatePlan, extractionResult = null) {
   const nextParts = safeClone(parts);
+  if (extractionResult?.sourceData && typeof extractionResult.sourceData === "object") {
+    nextParts.source_data = safeClone(extractionResult.sourceData);
+  }
+  if (typeof extractionResult?.renderCode === "string") {
+    nextParts.render_code = extractionResult.renderCode;
+  }
+
   const sourceDataUpdates = updatePlan?.sourceDataUpdates || [];
   sourceDataUpdates.forEach((update) => applySourceUpdate(nextParts, update));
 

@@ -113,7 +113,7 @@ export function parseIntent(prompt) {
       action: "update",
       expand: expand || true,
       parameters: {
-        triangle_style: "Preset",
+        triangle_style: "Recommendation",
       },
     });
   }
@@ -155,4 +155,3 @@ export function parseIntent(prompt) {
     },
   });
 }
-

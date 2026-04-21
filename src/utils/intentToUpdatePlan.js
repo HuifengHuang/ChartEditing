@@ -15,7 +15,7 @@ function hasAnyKey(keys, patterns) {
   return patterns.some((pattern) => keys.some((key) => key.includes(pattern)));
 }
 
-function mapIntentToLegacy(intentSpec) {
+function mapIntentToLegacy(intentSpec, extractionMap = {}) {
   const intent = asObject(intentSpec);
   const legacyTask = String(intent.task || "").trim();
   if (legacyTask) {
@@ -31,8 +31,10 @@ function mapIntentToLegacy(intentSpec) {
   const action = String(intent.action || "update").toLowerCase();
   const parameters = asObject(intent.parameters);
   const keys = normalizeParameterKeys(parameters);
+  const extractionKeys = Object.keys(asObject(extractionMap)).map((key) => String(key || "").toLowerCase());
+  const allKeys = [...keys, ...extractionKeys];
 
-  const isInput = keys.includes("input") && String(parameters.Input || parameters.input || "").toLowerCase() === "none";
+  const isInput = allKeys.includes("input") && String(parameters.Input || parameters.input || "").toLowerCase() === "none";
   if (target === "other" && isInput) {
     return {
       task: "other_input",
@@ -47,14 +49,16 @@ function mapIntentToLegacy(intentSpec) {
     target === "data" ||
     action === "add" ||
     action === "remove" ||
-    hasAnyKey(keys, ["data", "table", "row", "month"])
+    hasAnyKey(allKeys, ["data", "table", "row", "month"])
   ) {
     task = "element_edit";
-  } else if (hasAnyKey(keys, ["legend"])) {
+  } else if (hasAnyKey(allKeys, ["triangle"])) {
+    task = "triangle_style";
+  } else if (hasAnyKey(allKeys, ["legend"])) {
     task = "legend_edit";
-  } else if (hasAnyKey(keys, ["color", "theme", "palette", "style"])) {
+  } else if (hasAnyKey(allKeys, ["color", "theme", "palette", "style"])) {
     task = "color_theme";
-  } else if (hasAnyKey(keys, ["width", "height", "aspect", "ratio", "layout"])) {
+  } else if (hasAnyKey(allKeys, ["width", "height", "aspect", "ratio", "layout"])) {
     task = "aspect_ratio";
   }
 
@@ -209,14 +213,102 @@ function isAction(intentSpec, action) {
   return String(intentSpec?.action || "") === action;
 }
 
-export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
+function inferControlType(bindingType) {
+  if (bindingType === "number") {
+    return "number";
+  }
+  if (bindingType === "color") {
+    return "color";
+  }
+  if (bindingType === "bool") {
+    return "toggle";
+  }
+  return "text";
+}
+
+function inferValueType(controlType) {
+  if (controlType === "number") {
+    return "number";
+  }
+  if (controlType === "color") {
+    return "color";
+  }
+  if (controlType === "toggle") {
+    return "boolean";
+  }
+  return "string";
+}
+
+function createBindingControl(binding, prefix) {
+  const name = String(binding?.name || "").trim();
+  if (!name) {
+    return null;
+  }
+  const controlType = inferControlType(binding?.type);
+  const valueType = inferValueType(controlType);
+  const lastName = name.split(".").pop() || name;
+  return {
+    id: `${prefix}_${name.replace(/[^a-zA-Z0-9_]/g, "_")}`.toLowerCase(),
+    label: lastName,
+    controlType,
+    operationType: "update",
+    bindingMode: "single",
+    bind: name.startsWith("source_data.") ? name : `source_data.${name}`,
+    valueType,
+  };
+}
+
+function appendBindingSection(plan, sectionId, sectionTitle, bindings, prefix) {
+  const list = Array.isArray(bindings) ? bindings : [];
+  if (!list.length) {
+    return;
+  }
+  plan.panelUpdates.push({
+    type: "create-section",
+    payload: {
+      sectionId,
+      title: sectionTitle,
+      priority: "primary",
+      controls: [],
+    },
+  });
+  list.forEach((binding) => {
+    const control = createBindingControl(binding, prefix);
+    if (!control) {
+      return;
+    }
+    plan.panelUpdates.push({
+      type: "insert-control",
+      sectionId,
+      payload: control,
+    });
+  });
+  plan.panelUpdates.push({
+    type: "highlight-section",
+    sectionId,
+  });
+}
+
+export function intentToUpdatePlan(intentSpec, extractionResult, currentPanelSpec) {
   const plan = {
     sourceDataUpdates: [],
     panelUpdates: [],
   };
-  const normalizedIntent = mapIntentToLegacy(intentSpec);
+  const extractionMap = asObject(extractionResult?.extractionMap);
+  const currentParts = {
+    source_data: extractionResult?.sourceData || {},
+  };
+  const normalizedIntent = mapIntentToLegacy(intentSpec, extractionMap);
 
   if (normalizedIntent.task === "other_input") {
+    const inputEntry = extractionMap.Input || extractionMap.input || {};
+    appendBindingSection(
+      plan,
+      "upload_input_controls",
+      "Upload Input",
+      inputEntry.input || [],
+      "input"
+    );
     return plan;
   }
 
@@ -330,6 +422,18 @@ export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
       expandTaskDetails(plan, "legend_edit");
     }
 
+    return plan;
+  }
+
+  if (normalizedIntent.task === "triangle_style") {
+    const triangleEntry = extractionMap.triangle_style || extractionMap.triangle || {};
+    appendBindingSection(
+      plan,
+      "triangle_style",
+      "Triangle Style",
+      triangleEntry.primaryBindings || [],
+      "triangle"
+    );
     return plan;
   }
 
