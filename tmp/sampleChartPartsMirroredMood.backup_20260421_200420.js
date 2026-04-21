@@ -38,6 +38,20 @@ const sampleChartPartsMirroredMoodTemplate = {
     }
   `,
   source_data: {
+    layout: {
+      svgWidth: 420,
+      svgHeight: 520,
+      margin: { top: 18, right: 20, bottom: 16, left: 20 },
+      chartTop: 54,
+      chartBottom: 382,
+      barHeight: 19,
+      labelGap: 66,
+      valuePad: 8,
+      rowStep: 27.3,
+      fixedChartSize: true,
+      titleY: 438,
+      subtitleY: 488,
+    },
     data: [
       { month: "2023-01", waitingArea: 4.2, corridor: 3.8 },
       { month: "2023-02", waitingArea: 4.5, corridor: 4.1 },
@@ -52,6 +66,38 @@ const sampleChartPartsMirroredMoodTemplate = {
       { month: "2023-11", waitingArea: 8.6, corridor: 8.3 },
       { month: "2023-12", waitingArea: 8.9, corridor: 8.6 },
     ],
+    style: {
+      waitingAreaColor: "#c75b4e",
+      corridorColor: "#efc45a",
+      textMidColor: "#666666",
+      textLightColor: "#7a7a7a",
+      titleColor: "#3f3f3f",
+      subtitleColor: "#808080",
+      backgroundColor: "#f3f3f3",
+      cardBackgroundColor: "#ffffff",
+    },
+    legend: {
+      legendItems: [
+        { id: "waiting", label: "Waiting Area", color: "#c75b4e" },
+        { id: "corridor", label: "Corridor", color: "#efc45a" },
+      ],
+      legendFontSize: 12,
+      legendPosition: "top-center",
+      legendDirection: "horizontal",
+      legendOffsetY: 24,
+    },
+    title: {
+      titleLines: ["Patient Mood Scores Rise After", "Public Art Installation"],
+      subtitleLines: [
+        "Average mood scores improve consistently in waiting areas and",
+        "corridors through 2023 following public art installations.",
+      ],
+      titleFontSize: 22,
+      subtitleFontSize: 12,
+    },
+    meta: {
+      aspectRatioPreset: "420x520",
+    },
   },
   render_code: `
 function clampNumber(value, fallback, min, max) {
@@ -75,55 +121,10 @@ function formatScore(value) {
 }
 
 function renderChart(source_data) {
-  const defaultLayout = {
-    svgWidth: 420,
-    svgHeight: 520,
-    margin: { top: 18, right: 20, bottom: 16, left: 20 },
-    chartTop: 54,
-    chartBottom: 382,
-    barHeight: 19,
-    labelGap: 66,
-    valuePad: 8,
-    rowStep: 27.3,
-    fixedChartSize: true,
-    titleY: 438,
-    subtitleY: 488,
-  };
-  const defaultStyle = {
-    waitingAreaColor: "#c75b4e",
-    corridorColor: "#efc45a",
-    textMidColor: "#666666",
-    textLightColor: "#7a7a7a",
-    titleColor: "#3f3f3f",
-    subtitleColor: "#808080",
-    backgroundColor: "#f3f3f3",
-    cardBackgroundColor: "#ffffff",
-  };
-  const defaultLegend = {
-    legendItems: [
-      { id: "waiting", label: "Waiting Area", color: "#c75b4e" },
-      { id: "corridor", label: "Corridor", color: "#efc45a" },
-    ],
-    legendFontSize: 12,
-    legendPosition: "top-center",
-    legendDirection: "horizontal",
-    legendOffsetY: 24,
-  };
-  const defaultTitle = {
-    titleLines: ["Patient Mood Scores Rise After", "Public Art Installation"],
-    subtitleLines: [
-      "Average mood scores improve consistently in waiting areas and",
-      "corridors through 2023 following public art installations.",
-    ],
-    titleFontSize: 22,
-    subtitleFontSize: 12,
-  };
-
-  const layout = Object.assign({}, defaultLayout, asObject(source_data.layout, {}));
-  layout.margin = Object.assign({}, defaultLayout.margin, asObject(layout.margin, {}));
-  const style = Object.assign({}, defaultStyle, asObject(source_data.style, {}));
-  const legend = Object.assign({}, defaultLegend, asObject(source_data.legend, {}));
-  const title = Object.assign({}, defaultTitle, asObject(source_data.title, {}));
+  const layout = asObject(source_data.layout, {});
+  const style = asObject(source_data.style, {});
+  const legend = asObject(source_data.legend, {});
+  const title = asObject(source_data.title, {});
   const data = asArray(source_data.data, []);
 
   const svgWidth = clampNumber(layout.svgWidth, 420, 280, 1200);

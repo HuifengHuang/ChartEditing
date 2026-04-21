@@ -154,13 +154,13 @@ function ensureColorThemeExtraction(sourceData, renderCode, extractionMap, bindi
 
   const recommendations = [
     {
-      id: "soft",
-      label: "Soft",
+      id: "warm",
+      label: "Warm",
       values: {
-        "style.waitingAreaColor": "#d97795",
-        "style.corridorColor": "#f9c66e",
-        "style.titleColor": "#4b5563",
-        "style.subtitleColor": "#6b7280",
+        "style.waitingAreaColor": "#c75b4e",
+        "style.corridorColor": "#efc45a",
+        "style.titleColor": "#78350f",
+        "style.subtitleColor": "#92400e",
       },
     },
     {
@@ -174,13 +174,13 @@ function ensureColorThemeExtraction(sourceData, renderCode, extractionMap, bindi
       },
     },
     {
-      id: "warm",
-      label: "Warm",
+      id: "soft",
+      label: "Soft",
       values: {
-        "style.waitingAreaColor": "#c75b4e",
-        "style.corridorColor": "#efc45a",
-        "style.titleColor": "#78350f",
-        "style.subtitleColor": "#92400e",
+        "style.waitingAreaColor": "#d97795",
+        "style.corridorColor": "#f9c66e",
+        "style.titleColor": "#4b5563",
+        "style.subtitleColor": "#6b7280",
       },
     },
   ];
@@ -311,10 +311,27 @@ function ensureDataExtraction(sourceData, extractionMap) {
   };
 }
 
+function ensureStyleBaselineExtraction(sourceData, renderCode, extractionMap, bindingMap, codePatches) {
+  let nextRenderCode = renderCode;
+  // Baseline: width/height + theme colors should be materialized into source_data
+  // right after LLM interaction, even if parameters are vague.
+  nextRenderCode = ensureSizeExtraction(
+    sourceData,
+    nextRenderCode,
+    extractionMap,
+    bindingMap,
+    codePatches,
+    "aspect_ratio"
+  );
+  ensureColorThemeExtraction(sourceData, nextRenderCode, extractionMap, bindingMap);
+  return nextRenderCode;
+}
+
 export function runExtraction(intent, parts) {
   const sourceData = safeClone(parts?.source_data || {});
   let renderCode = String(parts?.render_code || "");
   const parameters = asObject(intent?.parameters);
+  const target = String(intent?.target || "").toLowerCase();
   const extractionMap = {};
   const bindingMap = {};
   const codePatches = [];
@@ -347,17 +364,17 @@ export function runExtraction(intent, parts) {
       return;
     }
 
-    if ((lowerKey === "chart_width" || lowerKey === "chart_height" || lowerKey === "aspect_ratio") && lowerValue === "preset") {
+    if (lowerKey === "chart_width" || lowerKey === "chart_height" || lowerKey === "aspect_ratio") {
       renderCode = ensureSizeExtraction(sourceData, renderCode, extractionMap, bindingMap, codePatches, lowerKey);
       return;
     }
 
-    if (lowerKey === "color_theme" && lowerValue === "recommendation") {
+    if (lowerKey === "color_theme" || lowerKey === "legend_color") {
       ensureColorThemeExtraction(sourceData, renderCode, extractionMap, bindingMap);
       return;
     }
 
-    if (lowerKey === "triangle_style") {
+    if (lowerKey === "triangle_style" || lowerKey.includes("triangle")) {
       renderCode = ensureTriangleStyleExtraction(sourceData, renderCode, extractionMap, bindingMap, codePatches);
       return;
     }
@@ -379,6 +396,16 @@ export function runExtraction(intent, parts) {
 
     extractionMap[key] = {};
   });
+
+  // Always trigger baseline style extraction right after model interaction,
+  // so source_data fields are materialized immediately (not waiting for UI clicks).
+  if (target === "style") {
+    renderCode = ensureStyleBaselineExtraction(sourceData, renderCode, extractionMap, bindingMap, codePatches);
+  }
+
+  if (target === "data" && !extractionMap.data_table) {
+    ensureDataExtraction(sourceData, extractionMap);
+  }
 
   return validateExtractionResult(
     {
