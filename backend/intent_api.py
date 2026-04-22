@@ -5,7 +5,10 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from flask import Flask, jsonify, request
-from flask_cors import CORS
+try:
+    from flask_cors import CORS
+except ModuleNotFoundError:
+    CORS = None
 
 try:
     from dotenv import load_dotenv
@@ -153,7 +156,10 @@ def call_model_or_error(*, prompt_text: str, image_base64: Optional[str]):
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    if CORS is not None:
+        CORS(app, resources={r"/api/*": {"origins": "*"}})
+    else:
+        print("[Warning] flask_cors is not installed, CORS support is disabled.")
 
     @app.post("/api/intent-parse")
     def intent_parse():
