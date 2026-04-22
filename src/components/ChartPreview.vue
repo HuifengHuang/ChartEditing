@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from "vue";
 
-defineProps({
+const props = defineProps({
   htmlContent: {
     type: String,
     required: true,
@@ -9,6 +9,24 @@ defineProps({
 });
 
 const iframeRef = ref(null);
+
+function exportChartHtml() {
+  const html = String(props.htmlContent || "").trim();
+  if (!html) {
+    return;
+  }
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  anchor.href = url;
+  anchor.download = `chart-export-${stamp}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
 
 function waitForFrameLoad(frame, timeoutMs = 1500) {
   return new Promise((resolve) => {
@@ -104,6 +122,9 @@ defineExpose({
   <section class="preview-panel panel">
     <header class="panel-header">
       <h2>Chart Preview</h2>
+      <button type="button" class="export-btn" @click="exportChartHtml">
+        Export HTML
+      </button>
     </header>
     <iframe
       ref="iframeRef"
@@ -128,6 +149,27 @@ defineExpose({
 .panel-header h2 {
   margin: 0;
   font-size: 18px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.export-btn {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.export-btn:hover {
+  background: #f8fafc;
 }
 
 iframe {
