@@ -7,7 +7,7 @@ function safeJson(value) {
 }
 
 export function buildIntentPrompt({ prompt, context }) {
-  const schemaText = `{
+  const singleIntentSchema = `{
   "intentId": "string",
   "intentType": "style | data",
   "task": "aspect_ratio | color_theme | element_edit | legend_edit",
@@ -17,6 +17,9 @@ export function buildIntentPrompt({ prompt, context }) {
   "needPanel": true,
   "panelStrategy": "create | extend | reuse",
   "detailRequested": false
+}`;
+  const schemaText = `{
+  "intents": [${singleIntentSchema}]
 }`;
 
   return [
@@ -30,6 +33,9 @@ export function buildIntentPrompt({ prompt, context }) {
     "- action must be one of: update, add, remove, show_panel",
     "- intentType must be style or data",
     "- If month/value cannot be extracted, keep parameters minimal but still valid.",
+    "- intents must be an array with at least 1 intent object.",
+    "- If the user asks for multiple independent edits, output multiple intents in intents[] in user-mentioned order.",
+    "- Do not duplicate equivalent intents for the same task unless the prompt clearly asks separate operations.",
     "- Panel-first policy: prefer exposing/reusing high-level controls first. Detail controls are only requested when needed.",
     "- detailRequested=true means the user asks to show finer-grained controls. It is NOT an independent task.",
     "- Do NOT output task=expand_controls / add_element / remove_element.",

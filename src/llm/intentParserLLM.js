@@ -1,7 +1,7 @@
 import { llmConfig } from "../config/llmConfig.js";
 import { buildIntentPrompt } from "./intentPromptBuilder.js";
 import { parseIntentResponse } from "./intentResponseParser.js";
-import { validateIntentSpec } from "./intentSchemaValidator.js";
+import { validateIntentList } from "./intentSchemaValidator.js";
 
 function createAbortSignal(timeoutMs) {
   const controller = new AbortController();
@@ -45,7 +45,7 @@ async function parseIntentWithYizhanProxy({ prompt, context, imageBase64 }) {
       throw new Error("LLM response is empty.");
     }
     const parsed = parseIntentResponse(rawText);
-    return validateIntentSpec(parsed);
+    return validateIntentList(parsed);
   } finally {
     timeout.clear();
   }

@@ -52,6 +52,16 @@ function pushToast(message, type = "info", timeoutMs = 2800) {
   }, timeoutMs);
 }
 
+function ensureIntentArray(rawIntents) {
+  if (Array.isArray(rawIntents)) {
+    return rawIntents.filter((item) => item && typeof item === "object");
+  }
+  if (rawIntents && typeof rawIntents === "object") {
+    return [rawIntents];
+  }
+  return [];
+}
+
 function buildIntentContext() {
   const sections = panelSpec.value?.sections || [];
   const sectionSummary = sections.map((section) => ({
@@ -100,36 +110,41 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
   }
 
   try {
-    const intent = await parseIntentWithLLM({
-      prompt,
-      context,
-      imageBase64,
-    });
+    const intents = ensureIntentArray(
+      await parseIntentWithLLM({
+        prompt,
+        context,
+        imageBase64,
+      })
+    );
+    const countText = intents.length > 1 ? `${intents.length} intents` : "1 intent";
     pushToast(
       imageBase64
-        ? "LLM parser succeeded with visual input."
-        : "LLM parser succeeded (text-only).",
+        ? `LLM parser succeeded with visual input (${countText}).`
+        : `LLM parser succeeded (text-only, ${countText}).`,
       "info"
     );
-    return intent;
+    return intents;
   } catch (visionError) {
     if (imageBase64) {
       try {
-        const intent = await parseIntentWithLLM({
-          prompt,
-          context,
-          imageBase64: null,
-        });
+        const intents = ensureIntentArray(
+          await parseIntentWithLLM({
+            prompt,
+            context,
+            imageBase64: null,
+          })
+        );
         pushToast("Visual parse failed, text-only LLM succeeded.", "warning");
-        return intent;
+        return intents;
       } catch (textError) {
         pushToast("LLM failed (vision + text-only), fallback to rule parser.", "warning");
-        return parseIntentByRule(prompt);
+        return ensureIntentArray(parseIntentByRule(prompt));
       }
     }
 
     pushToast("LLM failed, fallback to rule parser.", "warning");
-    return parseIntentByRule(prompt);
+    return ensureIntentArray(parseIntentByRule(prompt));
   }
 }
 
@@ -158,12 +173,26 @@ async function handlePromptSubmit(payload) {
   busy.value = true;
 
   try {
-    const intent = await resolveIntent({ prompt, userImageBase64 });
-    const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
-    const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
-    parts.value = nextState.parts;
-    panelSpec.value = nextState.panelSpec;
-    pushToast(`Last Intent: ${intent.task} (${intent.action})`, "success");
+    const intents = await resolveIntent({ prompt, userImageBase64 });
+    if (!intents.length) {
+      pushToast("No intent recognized.", "warning");
+      return;
+    }
+
+    let nextParts = parts.value;
+    let nextPanelSpec = panelSpec.value;
+    intents.forEach((intent) => {
+      const updatePlan = intentToUpdatePlan(intent, nextParts, nextPanelSpec);
+      const nextState = applyUpdatePlan(nextParts, nextPanelSpec, updatePlan);
+      nextParts = nextState.parts;
+      nextPanelSpec = nextState.panelSpec;
+    });
+
+    parts.value = nextParts;
+    panelSpec.value = nextPanelSpec;
+
+    const intentSummary = intents.map((intent) => `${intent.task} (${intent.action})`).join(" + ");
+    pushToast(`Intents: ${intentSummary}`, "success");
   } catch (error) {
     pushToast(error?.message || "Intent parsing failed.", "error", 4200);
   } finally {
