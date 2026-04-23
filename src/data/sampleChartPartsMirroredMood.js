@@ -88,6 +88,7 @@ const sampleChartPartsMirroredMoodTemplate = {
     },
     title: {
       titleLines: ["Patient Mood Scores Rise After", "Public Art Installation"],
+      content: "Average mood scores improve consistently in waiting areas andcorridors through 2023 following public art installations.",
       subtitleLines: [
         "Average mood scores improve consistently in waiting areas and",
         "corridors through 2023 following public art installations.",
@@ -119,6 +120,32 @@ function asObject(value, fallback) {
 function formatScore(value) {
   const safe = clampNumber(value, 0, 0, undefined);
   return safe.toFixed(1).replace(/\\.0$/, "");
+}
+
+function wrapTextByWords(text, maxCharsPerLine) {
+  const normalized = String(text || "").trim().replace(/\\s+/g, " ");
+  if (!normalized) {
+    return [];
+  }
+
+  const words = normalized.split(" ");
+  const lines = [];
+  let current = "";
+
+  words.forEach(function(word) {
+    const next = current ? current + " " + word : word;
+    if (next.length <= maxCharsPerLine || !current) {
+      current = next;
+      return;
+    }
+    lines.push(current);
+    current = word;
+  });
+
+  if (current) {
+    lines.push(current);
+  }
+  return lines;
 }
 
 function renderChart(source_data) {
@@ -161,7 +188,10 @@ function renderChart(source_data) {
   const legendOffsetY = clampNumber(legend.legendOffsetY, 24, 8, 80);
 
   const titleLines = asArray(title.titleLines, ["Mirrored Mood Chart"]);
-  const subtitleLines = asArray(title.subtitleLines, []);
+  const content = typeof title.content === "string" ? title.content : "";
+  const subtitleLines = content.trim()
+    ? wrapTextByWords(content, 56)
+    : asArray(title.subtitleLines, []);
   const titleFontSize = clampNumber(title.titleFontSize, 22, 10, 48);
   const subtitleFontSize = clampNumber(title.subtitleFontSize, 12, 8, 28);
 

@@ -245,6 +245,16 @@ function createControlTemplates() {
         corridor: 8.8,
       },
     },
+    text_content: {
+      id: "text_content",
+      label: "Text Content",
+      warningMessage: "This widget may be affected.",
+      controlType: "text",
+      operationType: "update",
+      bindingMode: "single",
+      bind: "source_data.title.content",
+      valueType: "string",
+    },
     fixed_chart_size: {
       id: "fixed_chart_size",
       label: "Fixed Chart Size",
@@ -416,9 +426,8 @@ const TASK_SECTION_REGISTRY = {
         title: "Data Table",
         priority: "primary",
         controls: [
-          CONTROL_TEMPLATES.table_orientation,
           CONTROL_TEMPLATES.mood_data_table,
-          CONTROL_TEMPLATES.fixed_chart_size,
+          CONTROL_TEMPLATES.text_content,
         ],
       },
     ],

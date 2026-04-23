@@ -401,7 +401,10 @@ function isRowActionEnabled(action) {
     <template v-else>
       <div class="control-header">
         <div class="control-title">
-          <label>{{ control.label }}</label>
+          <div class="control-title-line">
+            <label>{{ control.label }}</label>
+            <span v-if="control.warningMessage" class="control-warning">⚠️ {{ control.warningMessage }}</span>
+          </div>
         </div>
         <button
           v-if="control.expandable && control.detailSectionRef"
@@ -629,10 +632,23 @@ function isRowActionEnabled(action) {
   gap: 2px;
 }
 
+.control-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .control-title label {
   font-size: 13px;
   font-weight: 600;
   color: #111827;
+}
+
+.control-warning {
+  font-size: 12px;
+  color: #b45309;
+  font-weight: 500;
 }
 
 .expand-btn,

@@ -53,7 +53,7 @@ function maybeSendFinalReply() {
     return;
   }
 
-  pushMessage("assistant", "The code and UI panel have been updated for you.");
+  pushMessage("assistant", "The code and UI panel have been updated.");
   waitingFinalReply.value = false;
 }
 

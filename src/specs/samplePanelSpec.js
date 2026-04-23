@@ -26,6 +26,7 @@
  * @property {string} id
  * @property {string} label
  * @property {string=} description
+ * @property {string=} warningMessage
  * @property {"number"|"slider"|"text"|"color"|"select"|"toggle"|"action"|"select-action"|"preset-select"|"table"} controlType
  * @property {"update"|"add"|"remove"} operationType
  * @property {"single"|"multi"|"preset"|"collection"} bindingMode

@@ -258,18 +258,6 @@ export const samplePanelSpecMirroredMood = {
       priority: "primary",
       controls: [
         {
-          id: "table_orientation",
-          label: "Table Orientation",
-          controlType: "select",
-          operationType: "update",
-          bindingMode: "single",
-          bind: "source_data.meta.tableOrientation",
-          options: [
-            { label: "Row Major", value: "row-major" },
-            { label: "Column Major", value: "column-major" },
-          ],
-        },
-        {
           id: "mood_data_table",
           label: "Mood Data",
           controlType: "table",
@@ -279,8 +267,7 @@ export const samplePanelSpecMirroredMood = {
           rowKey: "month",
           rowActions: ["add", "remove"],
           schemaSource: "mixed",
-          tableOrientation: "auto",
-          orientationKey: "source_data.meta.tableOrientation",
+          tableOrientation: "row-major",
           tableSchema: [
             { key: "month", label: "Month", valueType: "string", editable: true },
             { key: "waitingArea", label: "Waiting Area", valueType: "number", editable: true },
@@ -291,6 +278,16 @@ export const samplePanelSpecMirroredMood = {
             waitingArea: 9.1,
             corridor: 8.8,
           },
+        },
+        {
+          id: "text_content",
+          label: "Text Content",
+          warningMessage: "This widget may be affected.",
+          controlType: "text",
+          operationType: "update",
+          bindingMode: "single",
+          bind: "source_data.title.content",
+          valueType: "string",
         },
       ],
     },
