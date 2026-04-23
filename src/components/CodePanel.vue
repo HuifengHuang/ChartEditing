@@ -27,29 +27,41 @@ const imageUploadError = ref("");
 const messages = ref([]);
 const messageSeed = ref(0);
 const waitingFinalReply = ref(false);
-const introReplyShown = ref(false);
 const llmCompletedForTurn = ref(false);
 const isRebuilding = ref(false);
 let introReplyTimerId = null;
 let rebuildStatusTimerId = null;
 let rebuildStatusMessageId = null;
+let processingStatusMessageId = null;
 
-function pushMessage(role, content) {
+function pushMessage(role, content, options = {}) {
   const message = {
     id: `msg_${Date.now()}_${messageSeed.value++}`,
     role,
     content,
-    loading: false,
+    loading: Boolean(options.loading),
   };
   messages.value.push(message);
   return message.id;
+}
+
+function removeMessageById(messageId) {
+  if (!messageId) {
+    return;
+  }
+  messages.value = messages.value.filter((item) => item.id !== messageId);
+}
+
+function clearProcessingStatusMessage() {
+  removeMessageById(processingStatusMessageId);
+  processingStatusMessageId = null;
 }
 
 function maybeSendFinalReply() {
   if (!waitingFinalReply.value) {
     return;
   }
-  if (!introReplyShown.value || !llmCompletedForTurn.value) {
+  if (!llmCompletedForTurn.value) {
     return;
   }
 
@@ -63,7 +75,12 @@ watch(
     if (Number(nextValue) <= Number(prevValue ?? 0)) {
       return;
     }
+    if (introReplyTimerId) {
+      clearTimeout(introReplyTimerId);
+      introReplyTimerId = null;
+    }
     llmCompletedForTurn.value = true;
+    clearProcessingStatusMessage();
     maybeSendFinalReply();
   }
 );
@@ -81,12 +98,17 @@ function submitPrompt() {
 
   pushMessage("user", value);
   waitingFinalReply.value = true;
-  introReplyShown.value = false;
   llmCompletedForTurn.value = false;
+  clearProcessingStatusMessage();
 
   introReplyTimerId = setTimeout(() => {
-    introReplyShown.value = true;
-    pushMessage("assistant", "Okay, processing your request.");
+    if (!waitingFinalReply.value || llmCompletedForTurn.value) {
+      introReplyTimerId = null;
+      return;
+    }
+    processingStatusMessageId = pushMessage("assistant", "Okay, processing your request.", {
+      loading: true,
+    });
     maybeSendFinalReply();
     introReplyTimerId = null;
   }, 1000);
@@ -204,6 +226,7 @@ onBeforeUnmount(() => {
     clearTimeout(rebuildStatusTimerId);
     rebuildStatusTimerId = null;
   }
+  clearProcessingStatusMessage();
   rebuildStatusMessageId = null;
 });
 </script>
