@@ -134,6 +134,8 @@ function createControlTemplates() {
             "source_data.style.corridorColor": "#efc45a",
             "source_data.style.titleColor": "#3f3f3f",
             "source_data.style.subtitleColor": "#808080",
+            "source_data.legend.legendItems.0.color": "#c75b4e",
+            "source_data.legend.legendItems.1.color": "#efc45a",
           },
         },
         {
@@ -144,6 +146,8 @@ function createControlTemplates() {
             "source_data.style.corridorColor": "#f9c66e",
             "source_data.style.titleColor": "#4b5563",
             "source_data.style.subtitleColor": "#6b7280",
+            "source_data.legend.legendItems.0.color": "#d97795",
+            "source_data.legend.legendItems.1.color": "#f9c66e",
           },
         },
         {
@@ -154,6 +158,8 @@ function createControlTemplates() {
             "source_data.style.corridorColor": "#38bdf8",
             "source_data.style.titleColor": "#0f172a",
             "source_data.style.subtitleColor": "#334155",
+            "source_data.legend.legendItems.0.color": "#2563eb",
+            "source_data.legend.legendItems.1.color": "#38bdf8",
           },
         },
       ],

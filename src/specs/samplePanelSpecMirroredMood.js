@@ -169,6 +169,8 @@ export const samplePanelSpecMirroredMood = {
                 "source_data.style.subtitleColor": "#808080",
                 "source_data.style.textMidColor": "#666666",
                 "source_data.style.textLightColor": "#7a7a7a",
+                "source_data.legend.legendItems.0.color": "#c75b4e",
+                "source_data.legend.legendItems.1.color": "#efc45a",
               },
             },
             {
@@ -181,6 +183,8 @@ export const samplePanelSpecMirroredMood = {
                 "source_data.style.subtitleColor": "#334155",
                 "source_data.style.textMidColor": "#475569",
                 "source_data.style.textLightColor": "#64748b",
+                "source_data.legend.legendItems.0.color": "#2563eb",
+                "source_data.legend.legendItems.1.color": "#38bdf8",
               },
             },
             {
@@ -193,6 +197,8 @@ export const samplePanelSpecMirroredMood = {
                 "source_data.style.subtitleColor": "#3f6212",
                 "source_data.style.textMidColor": "#365314",
                 "source_data.style.textLightColor": "#4d7c0f",
+                "source_data.legend.legendItems.0.color": "#047857",
+                "source_data.legend.legendItems.1.color": "#84cc16",
               },
             },
           ],

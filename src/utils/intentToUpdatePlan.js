@@ -78,6 +78,8 @@ function createThemePatchByHint(themeHint) {
       "source_data.style.subtitleColor": "#334155",
       "source_data.style.textMidColor": "#475569",
       "source_data.style.textLightColor": "#64748b",
+      "source_data.legend.legendItems.0.color": "#2563eb",
+      "source_data.legend.legendItems.1.color": "#38bdf8",
     };
   }
 
@@ -89,6 +91,8 @@ function createThemePatchByHint(themeHint) {
       "source_data.style.subtitleColor": "#92400e",
       "source_data.style.textMidColor": "#7c2d12",
       "source_data.style.textLightColor": "#9a3412",
+      "source_data.legend.legendItems.0.color": "#c75b4e",
+      "source_data.legend.legendItems.1.color": "#efc45a",
     };
   }
 
@@ -100,6 +104,8 @@ function createThemePatchByHint(themeHint) {
       "source_data.style.subtitleColor": "#6b7280",
       "source_data.style.textMidColor": "#6b7280",
       "source_data.style.textLightColor": "#9ca3af",
+      "source_data.legend.legendItems.0.color": "#d97795",
+      "source_data.legend.legendItems.1.color": "#f9c66e",
     };
   }
 
