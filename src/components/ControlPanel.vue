@@ -170,7 +170,9 @@ function isHighlighted(sectionId) {
   border-radius: 12px;
   padding: 14px;
   height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .panel-header h2 {
