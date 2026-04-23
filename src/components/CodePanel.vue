@@ -1,5 +1,8 @@
 <script setup>
 import { onBeforeUnmount, ref, watch } from "vue";
+import { uiTimingConfig } from "../config/uiTimingConfig";
+import aiAvatar from "../assets/AI.png";
+import userAvatar from "../assets/user.png";
 
 const props = defineProps({
   busy: {
@@ -13,7 +16,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["submit-prompt", "image-uploaded"]);
-const REBUILD_DELAY_MS = 20_000;
+const REBUILD_DELAY_MS = uiTimingConfig.chartRebuildDelayMs;
 
 const chatInput = ref("");
 const imageFileInputRef = ref(null);
@@ -26,6 +29,7 @@ const messageSeed = ref(0);
 const waitingFinalReply = ref(false);
 const introReplyShown = ref(false);
 const llmCompletedForTurn = ref(false);
+const isRebuilding = ref(false);
 let introReplyTimerId = null;
 let rebuildStatusTimerId = null;
 let rebuildStatusMessageId = null;
@@ -66,7 +70,7 @@ watch(
 
 function submitPrompt() {
   const value = chatInput.value.trim();
-  if (!value || props.busy) {
+  if (!value || props.busy || isRebuilding.value) {
     return;
   }
 
@@ -75,8 +79,7 @@ function submitPrompt() {
     introReplyTimerId = null;
   }
 
-  const userMessage = uploadedImageName.value ? `${value}\n[Attached image: ${uploadedImageName.value}]` : value;
-  pushMessage("user", userMessage);
+  pushMessage("user", value);
   waitingFinalReply.value = true;
   introReplyShown.value = false;
   llmCompletedForTurn.value = false;
@@ -117,6 +120,8 @@ function updateMessageById(messageId, updater) {
 }
 
 function showRebuildStatusMessage() {
+  isRebuilding.value = true;
+
   if (rebuildStatusTimerId) {
     clearTimeout(rebuildStatusTimerId);
     rebuildStatusTimerId = null;
@@ -136,6 +141,7 @@ function showRebuildStatusMessage() {
       message.loading = false;
       message.content = "The chart has been rebuilt for you.";
     });
+    isRebuilding.value = false;
     rebuildStatusTimerId = null;
     rebuildStatusMessageId = null;
   }, REBUILD_DELAY_MS);
@@ -251,12 +257,18 @@ onBeforeUnmount(() => {
 
         <div class="chat-log">
           <div v-for="message in messages" :key="message.id" class="chat-item" :class="message.role">
-            <div class="chat-role">{{ message.role === "user" ? "You" : "Model" }}</div>
-            <div class="chat-content">
-              {{ message.content }}
-              <span v-if="message.loading" class="loading-dots" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </span>
+            <img
+              class="chat-avatar"
+              :src="message.role === 'user' ? userAvatar : aiAvatar"
+              :alt="message.role === 'user' ? 'User avatar' : 'AI avatar'"
+            />
+            <div class="chat-bubble">
+              <div class="chat-content">
+                {{ message.content }}
+                <span v-if="message.loading" class="loading-dots" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -269,7 +281,7 @@ onBeforeUnmount(() => {
             placeholder="Talk to the model..."
             @keydown.enter.prevent="submitPrompt"
           />
-          <button type="button" :disabled="busy" @click="submitPrompt">
+          <button type="button" :disabled="busy || isRebuilding" @click="submitPrompt">
             {{ busy ? "Running..." : "Send" }}
           </button>
         </div>
@@ -399,30 +411,44 @@ onBeforeUnmount(() => {
   overflow: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  background: #f8fafc;
-  padding: 8px;
+  background: #ffffff;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .chat-item {
-  border-radius: 8px;
-  padding: 7px 8px;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .chat-item.user {
-  background: #dbeafe;
+  justify-content: flex-start;
+  flex-direction: row-reverse;
 }
 
-.chat-item.assistant {
-  background: #ecfeff;
+.chat-item.user .chat-content {
+  text-align: right;
 }
 
-.chat-role {
-  font-size: 11px;
-  color: #475569;
-  margin-bottom: 4px;
+.chat-bubble {
+  width: fit-content;
+  max-width: min(75%, 420px);
+  border-radius: 6px;
+  background: #f5f7fa;
+  padding: 8px 10px;
+}
+
+.chat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .chat-content {

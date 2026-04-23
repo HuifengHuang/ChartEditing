@@ -7,6 +7,7 @@ import {
   createSampleChartPartsMirroredMood,
 } from "./data/sampleChartPartsMirroredMood";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
+import { uiTimingConfig } from "./config/uiTimingConfig";
 import { buildChartHtml } from "./utils/buildChartHtml";
 import { parseIntent as parseIntentByRule } from "./utils/parseIntent";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
@@ -33,7 +34,7 @@ const llmResponseTick = ref(0);
 const toasts = ref([]);
 const isPreviewVisible = ref(false);
 const previewPlaceholderText = ref("No chart entered");
-const PREVIEW_REBUILD_DELAY_MS = 20_000;
+const PREVIEW_REBUILD_DELAY_MS = uiTimingConfig.chartRebuildDelayMs;
 let toastSeed = 0;
 let previewRebuildTimerId = null;
 
@@ -310,7 +311,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 350px minmax(520px, 1fr) 320px;
+  grid-template-columns: minmax(360px, 1.05fr) minmax(420px, 2.09fr) minmax(360px, 1.31fr);
   gap: 12px;
   align-items: stretch;
 }
@@ -319,6 +320,13 @@ onBeforeUnmount(() => {
 .center-column,
 .right-column {
   min-height: 0;
+  width: 100%;
+}
+
+.left-column > *,
+.center-column > *,
+.right-column > * {
+  width: 100%;
 }
 
 .right-column {
