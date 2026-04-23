@@ -3,10 +3,8 @@ import { computed, nextTick, ref } from "vue";
 import CodePanel from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
-import PromptBar from "./components/PromptBar.vue";
 import {
   createSampleChartPartsMirroredMood,
-  sourceDataMirroredMoodToCode,
 } from "./data/sampleChartPartsMirroredMood";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
@@ -31,10 +29,10 @@ const panelSpec = ref(createEmptyPanelSpec());
 const chartPreviewRef = ref(null);
 
 const busy = ref(false);
+const llmResponseTick = ref(0);
 const toasts = ref([]);
 let toastSeed = 0;
 
-const sourceDataCode = computed(() => sourceDataMirroredMoodToCode(parts.value.source_data));
 const htmlContent = computed(() => buildChartHtml(parts.value));
 
 function pushToast(message, type = "info", timeoutMs = 2800) {
@@ -150,6 +148,7 @@ async function handlePromptSubmit(payload) {
   } catch (error) {
     pushToast(error?.message || "Intent parsing failed.", "error", 4200);
   } finally {
+    llmResponseTick.value += 1;
     busy.value = false;
   }
 }
@@ -160,11 +159,6 @@ async function handlePromptSubmit(payload) {
     <header class="workbench-header">
       <h1>Chart Editing Workbench</h1>
     </header>
-
-    <PromptBar
-      :busy="busy"
-      @submit-prompt="handlePromptSubmit"
-    />
 
     <div class="toast-layer" aria-live="polite">
       <div
@@ -179,7 +173,11 @@ async function handlePromptSubmit(payload) {
 
     <section class="workbench-grid">
       <div class="left-column">
-        <CodePanel :source-data-code="sourceDataCode" :render-code="parts.render_code" />
+        <CodePanel
+          :busy="busy"
+          :llm-response-tick="llmResponseTick"
+          @submit-prompt="handlePromptSubmit"
+        />
       </div>
 
       <div class="center-column">
