@@ -14,8 +14,12 @@ const props = defineProps({
 
 const emit = defineEmits(["submit-prompt"]);
 
-const chartHtmlInput = ref("");
 const chatInput = ref("");
+const imageFileInputRef = ref(null);
+const uploadedImageDataUrl = ref("");
+const uploadedImageBase64 = ref("");
+const uploadedImageName = ref("");
+const imageUploadError = ref("");
 const messages = ref([]);
 const messageSeed = ref(0);
 const waitingFinalReply = ref(false);
@@ -65,7 +69,8 @@ function submitPrompt() {
     introReplyTimerId = null;
   }
 
-  pushMessage("user", value);
+  const userMessage = uploadedImageName.value ? `${value}\n[Attached image: ${uploadedImageName.value}]` : value;
+  pushMessage("user", userMessage);
   waitingFinalReply.value = true;
   introReplyShown.value = false;
   llmCompletedForTurn.value = false;
@@ -77,8 +82,65 @@ function submitPrompt() {
     introReplyTimerId = null;
   }, 1000);
 
-  emit("submit-prompt", value);
+  emit("submit-prompt", {
+    prompt: value,
+    imageBase64: uploadedImageBase64.value || null,
+    imageName: uploadedImageName.value || null,
+  });
   chatInput.value = "";
+}
+
+function clearUploadedImage() {
+  uploadedImageDataUrl.value = "";
+  uploadedImageBase64.value = "";
+  uploadedImageName.value = "";
+  imageUploadError.value = "";
+  if (imageFileInputRef.value) {
+    imageFileInputRef.value.value = "";
+  }
+}
+
+function triggerImagePicker() {
+  if (props.busy || !imageFileInputRef.value) {
+    return;
+  }
+  imageFileInputRef.value.value = "";
+  imageFileInputRef.value.click();
+}
+
+function onImageSelected(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  imageUploadError.value = "";
+  if (!String(file.type || "").startsWith("image/")) {
+    clearUploadedImage();
+    imageUploadError.value = "Please upload an image file.";
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = String(reader.result || "");
+    const base64 = dataUrl.split(",")[1] || "";
+
+    if (!base64) {
+      clearUploadedImage();
+      imageUploadError.value = "Failed to read image data.";
+      return;
+    }
+
+    uploadedImageDataUrl.value = dataUrl;
+    uploadedImageBase64.value = base64;
+    uploadedImageName.value = file.name || "uploaded-image";
+  };
+  reader.onerror = () => {
+    clearUploadedImage();
+    imageUploadError.value = "Failed to read image data.";
+  };
+  reader.readAsDataURL(file);
 }
 
 onBeforeUnmount(() => {
@@ -98,14 +160,37 @@ onBeforeUnmount(() => {
     <div class="panel-sections">
       <section class="panel-section">
         <header class="section-title-row">
-          <h3>Chart Input (.html)</h3>
-          <input type="file" accept=".html,text/html" />
+          <h3>Chart Input</h3>
         </header>
-        <textarea
-          v-model="chartHtmlInput"
-          spellcheck="false"
-          placeholder="Paste your chart html content here (.html)."
-        />
+
+        <div class="chart-input-wrap">
+          <div class="image-upload-row">
+            <input
+              ref="imageFileInputRef"
+              class="image-file-input"
+              type="file"
+              accept="image/*"
+              :disabled="busy"
+              @change="onImageSelected"
+            />
+            <button type="button" class="upload-btn" :disabled="busy" @click="triggerImagePicker">
+              {{ uploadedImageDataUrl ? "Re-upload" : "Choose File" }}
+            </button>
+          </div>
+
+          <div v-if="uploadedImageName" class="image-name">{{ uploadedImageName }}</div>
+          <div v-if="imageUploadError" class="image-error">{{ imageUploadError }}</div>
+
+          <div v-if="!uploadedImageDataUrl" class="image-empty">
+            No image uploaded yet.
+          </div>
+          <img
+            v-else
+            class="image-preview"
+            :src="uploadedImageDataUrl"
+            alt="Chart input preview"
+          />
+        </div>
       </section>
 
       <section class="panel-section">
@@ -185,17 +270,71 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-textarea {
+.chart-input-wrap {
   flex: 1;
   min-height: 0;
-  resize: none;
-  border: 1px solid #d1d5db;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 10px;
-  font-size: 12px;
-  font-family: "Cascadia Code", "Consolas", monospace;
-  line-height: 1.5;
   background: #f8fafc;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-upload-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.image-file-input {
+  display: none;
+}
+
+.upload-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.image-name {
+  font-size: 12px;
+  color: #475569;
+}
+
+.image-error {
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.image-empty {
+  flex: 1;
+  min-height: 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.image-preview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .chat-log {

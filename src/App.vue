@@ -82,14 +82,16 @@ async function captureCurrentChartImage() {
   return captureFn();
 }
 
-async function resolveIntent(prompt) {
+async function resolveIntent({ prompt, userImageBase64 = null }) {
   const context = buildIntentContext();
-  let imageBase64 = null;
+  let imageBase64 = typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
 
-  try {
-    imageBase64 = await captureCurrentChartImage();
-  } catch (error) {
-    imageBase64 = null;
+  if (!imageBase64) {
+    try {
+      imageBase64 = await captureCurrentChartImage();
+    } catch (error) {
+      imageBase64 = null;
+    }
   }
 
   try {
@@ -131,7 +133,19 @@ async function handlePromptSubmit(payload) {
     return;
   }
 
-  const prompt = String(payload || "").trim();
+  const normalizedPayload =
+    payload && typeof payload === "object"
+      ? payload
+      : {
+          prompt: String(payload || ""),
+          imageBase64: null,
+        };
+
+  const prompt = String(normalizedPayload.prompt || "").trim();
+  const userImageBase64 =
+    typeof normalizedPayload.imageBase64 === "string" && normalizedPayload.imageBase64.trim()
+      ? normalizedPayload.imageBase64.trim()
+      : null;
   if (!prompt) {
     return;
   }
@@ -139,7 +153,7 @@ async function handlePromptSubmit(payload) {
   busy.value = true;
 
   try {
-    const intent = await resolveIntent(prompt);
+    const intent = await resolveIntent({ prompt, userImageBase64 });
     const updatePlan = intentToUpdatePlan(intent, parts.value, panelSpec.value);
     const nextState = applyUpdatePlan(parts.value, panelSpec.value, updatePlan);
     parts.value = nextState.parts;
