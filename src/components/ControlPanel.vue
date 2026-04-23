@@ -68,14 +68,59 @@ watch(
   { immediate: true }
 );
 
-const visibleSections = computed(() =>
-  (props.panelSpec.sections || []).filter((section) => {
-    if (section.priority !== "detail") {
-      return true;
+const renderSectionBlocks = computed(() => {
+  const sections = props.panelSpec.sections || [];
+  const attachedDetailIds = new Set();
+  const blocks = [];
+
+  sections.forEach((section) => {
+    if (section.priority === "detail") {
+      return;
     }
-    return expandedDetailSections.value.has(section.sectionId);
-  })
-);
+
+    const detailSections = [];
+    (section.controls || []).forEach((control) => {
+      if (!control.expandable || !control.detailSectionRef) {
+        return;
+      }
+      if (!expandedDetailSections.value.has(control.detailSectionRef)) {
+        return;
+      }
+      const detailSection = sectionMap.value.get(control.detailSectionRef);
+      if (!detailSection) {
+        return;
+      }
+      if (detailSections.some((item) => item.sectionId === detailSection.sectionId)) {
+        return;
+      }
+      detailSections.push(detailSection);
+      attachedDetailIds.add(detailSection.sectionId);
+    });
+
+    blocks.push({
+      section,
+      detailSections,
+    });
+  });
+
+  sections.forEach((section) => {
+    if (section.priority !== "detail") {
+      return;
+    }
+    if (!expandedDetailSections.value.has(section.sectionId)) {
+      return;
+    }
+    if (attachedDetailIds.has(section.sectionId)) {
+      return;
+    }
+    blocks.push({
+      section,
+      detailSections: [],
+    });
+  });
+
+  return blocks;
+});
 
 function applyPatch(patch) {
   if (!patch || typeof patch !== "object") {
@@ -118,8 +163,15 @@ function isUnsupported(sectionId, controlId) {
   return unsupportedControlKeys.value.has(`${sectionId}::${controlId}`);
 }
 
-function isHighlighted(sectionId) {
-  return props.panelSpec?.uiState?.highlightedSectionId === sectionId;
+function isBlockHighlighted(block) {
+  const highlightedSectionId = props.panelSpec?.uiState?.highlightedSectionId;
+  if (!highlightedSectionId) {
+    return false;
+  }
+  if (block.section.sectionId === highlightedSectionId) {
+    return true;
+  }
+  return block.detailSections.some((section) => section.sectionId === highlightedSectionId);
 }
 </script>
 
@@ -135,28 +187,48 @@ function isHighlighted(sectionId) {
 
     <div class="section-list">
       <section
-        v-for="section in visibleSections"
-        :key="section.sectionId"
+        v-for="block in renderSectionBlocks"
+        :key="block.section.sectionId"
         class="spec-section"
-        :class="{ highlighted: isHighlighted(section.sectionId) }"
+        :class="{ highlighted: isBlockHighlighted(block) }"
       >
         <header class="section-header">
-          <h3>{{ section.title }}</h3>
+          <h3>{{ block.section.title }}</h3>
         </header>
 
         <div class="controls-list">
           <ControlRenderer
-            v-for="control in section.controls"
+            v-for="control in block.section.controls"
             :key="control.id"
             :control="control"
             :parts="parts"
-            :is-unsupported="isUnsupported(section.sectionId, control.id)"
+            :is-unsupported="isUnsupported(block.section.sectionId, control.id)"
             :is-detail-expanded="Boolean(control.detailSectionRef && expandedDetailSections.has(control.detailSectionRef))"
             @apply-patch="applyPatch"
             @add-item="onAddItem"
             @remove-item="onRemoveItem"
             @toggle-detail="toggleDetailSection"
           />
+        </div>
+
+        <div v-for="detailSection in block.detailSections" :key="detailSection.sectionId" class="detail-section">
+          <header class="section-header detail-header">
+            <h4>{{ detailSection.title }}</h4>
+          </header>
+          <div class="controls-list detail-controls">
+            <ControlRenderer
+              v-for="control in detailSection.controls"
+              :key="control.id"
+              :control="control"
+              :parts="parts"
+              :is-unsupported="isUnsupported(detailSection.sectionId, control.id)"
+              :is-detail-expanded="Boolean(control.detailSectionRef && expandedDetailSections.has(control.detailSectionRef))"
+              @apply-patch="applyPatch"
+              @add-item="onAddItem"
+              @remove-item="onRemoveItem"
+              @toggle-detail="toggleDetailSection"
+            />
+          </div>
         </div>
       </section>
     </div>
@@ -218,5 +290,21 @@ function isHighlighted(sectionId) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.detail-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #dbeafe;
+}
+
+.detail-header h4 {
+  margin: 0;
+  font-size: 13px;
+  color: #1e3a8a;
+}
+
+.detail-controls {
+  margin-top: 8px;
 }
 </style>
