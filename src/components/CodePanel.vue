@@ -12,7 +12,8 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["submit-prompt"]);
+const emit = defineEmits(["submit-prompt", "image-uploaded"]);
+const REBUILD_DELAY_MS = 20_000;
 
 const chatInput = ref("");
 const imageFileInputRef = ref(null);
@@ -26,13 +27,18 @@ const waitingFinalReply = ref(false);
 const introReplyShown = ref(false);
 const llmCompletedForTurn = ref(false);
 let introReplyTimerId = null;
+let rebuildStatusTimerId = null;
+let rebuildStatusMessageId = null;
 
 function pushMessage(role, content) {
-  messages.value.push({
+  const message = {
     id: `msg_${Date.now()}_${messageSeed.value++}`,
     role,
     content,
-  });
+    loading: false,
+  };
+  messages.value.push(message);
+  return message.id;
 }
 
 function maybeSendFinalReply() {
@@ -100,6 +106,41 @@ function clearUploadedImage() {
   }
 }
 
+function updateMessageById(messageId, updater) {
+  const index = messages.value.findIndex((item) => item.id === messageId);
+  if (index < 0) {
+    return;
+  }
+  const next = { ...messages.value[index] };
+  updater(next);
+  messages.value[index] = next;
+}
+
+function showRebuildStatusMessage() {
+  if (rebuildStatusTimerId) {
+    clearTimeout(rebuildStatusTimerId);
+    rebuildStatusTimerId = null;
+  }
+
+  if (!rebuildStatusMessageId) {
+    rebuildStatusMessageId = pushMessage("assistant", "Rebuilding the chart...");
+  }
+
+  updateMessageById(rebuildStatusMessageId, (message) => {
+    message.content = "Rebuilding the chart...";
+    message.loading = true;
+  });
+
+  rebuildStatusTimerId = setTimeout(() => {
+    updateMessageById(rebuildStatusMessageId, (message) => {
+      message.loading = false;
+      message.content = "The chart has been rebuilt for you.";
+    });
+    rebuildStatusTimerId = null;
+    rebuildStatusMessageId = null;
+  }, REBUILD_DELAY_MS);
+}
+
 function triggerImagePicker() {
   if (props.busy || !imageFileInputRef.value) {
     return;
@@ -135,6 +176,11 @@ function onImageSelected(event) {
     uploadedImageDataUrl.value = dataUrl;
     uploadedImageBase64.value = base64;
     uploadedImageName.value = file.name || "uploaded-image";
+    emit("image-uploaded", {
+      imageBase64: uploadedImageBase64.value,
+      imageName: uploadedImageName.value,
+    });
+    showRebuildStatusMessage();
   };
   reader.onerror = () => {
     clearUploadedImage();
@@ -148,6 +194,11 @@ onBeforeUnmount(() => {
     clearTimeout(introReplyTimerId);
     introReplyTimerId = null;
   }
+  if (rebuildStatusTimerId) {
+    clearTimeout(rebuildStatusTimerId);
+    rebuildStatusTimerId = null;
+  }
+  rebuildStatusMessageId = null;
 });
 </script>
 
@@ -201,7 +252,12 @@ onBeforeUnmount(() => {
         <div class="chat-log">
           <div v-for="message in messages" :key="message.id" class="chat-item" :class="message.role">
             <div class="chat-role">{{ message.role === "user" ? "You" : "Model" }}</div>
-            <div class="chat-content">{{ message.content }}</div>
+            <div class="chat-content">
+              {{ message.content }}
+              <span v-if="message.loading" class="loading-dots" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -374,6 +430,43 @@ onBeforeUnmount(() => {
   color: #0f172a;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.loading-dots {
+  display: inline-flex;
+  margin-left: 6px;
+  gap: 2px;
+  align-items: center;
+}
+
+.loading-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #475569;
+  opacity: 0.25;
+  animation: dot-blink 1.2s infinite ease-in-out;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
 }
 
 .chat-input-row {

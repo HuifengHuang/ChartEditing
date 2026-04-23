@@ -6,6 +6,14 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  isChartVisible: {
+    type: Boolean,
+    default: true,
+  },
+  placeholderText: {
+    type: String,
+    default: "No chart entered",
+  },
 });
 
 const iframeRef = ref(null);
@@ -126,7 +134,11 @@ defineExpose({
         Export HTML
       </button>
     </header>
+    <div v-if="!isChartVisible" class="preview-rebuild-placeholder">
+      {{ placeholderText }}
+    </div>
     <iframe
+      v-else
       ref="iframeRef"
       :srcdoc="htmlContent"
       sandbox="allow-scripts allow-same-origin"
@@ -180,5 +192,19 @@ iframe {
   border: 1px solid #d1d5db;
   border-radius: 10px;
   background: #ffffff;
+}
+
+.preview-rebuild-placeholder {
+  margin-top: 12px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  display: grid;
+  place-items: center;
+  color: #475569;
+  font-size: 13px;
 }
 </style>

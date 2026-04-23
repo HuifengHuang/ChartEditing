@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import CodePanel from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
@@ -31,7 +31,11 @@ const chartPreviewRef = ref(null);
 const busy = ref(false);
 const llmResponseTick = ref(0);
 const toasts = ref([]);
+const isPreviewVisible = ref(false);
+const previewPlaceholderText = ref("No chart entered");
+const PREVIEW_REBUILD_DELAY_MS = 20_000;
 let toastSeed = 0;
+let previewRebuildTimerId = null;
 
 const htmlContent = computed(() => buildChartHtml(parts.value));
 
@@ -166,6 +170,28 @@ async function handlePromptSubmit(payload) {
     busy.value = false;
   }
 }
+
+function handleImageUploaded() {
+  isPreviewVisible.value = false;
+  previewPlaceholderText.value = "Rebuiling chart preview...";
+
+  if (previewRebuildTimerId) {
+    clearTimeout(previewRebuildTimerId);
+    previewRebuildTimerId = null;
+  }
+
+  previewRebuildTimerId = setTimeout(() => {
+    isPreviewVisible.value = true;
+    previewRebuildTimerId = null;
+  }, PREVIEW_REBUILD_DELAY_MS);
+}
+
+onBeforeUnmount(() => {
+  if (previewRebuildTimerId) {
+    clearTimeout(previewRebuildTimerId);
+    previewRebuildTimerId = null;
+  }
+});
 </script>
 
 <template>
@@ -191,11 +217,17 @@ async function handlePromptSubmit(payload) {
           :busy="busy"
           :llm-response-tick="llmResponseTick"
           @submit-prompt="handlePromptSubmit"
+          @image-uploaded="handleImageUploaded"
         />
       </div>
 
       <div class="center-column">
-        <ChartPreview ref="chartPreviewRef" :html-content="htmlContent" />
+        <ChartPreview
+          ref="chartPreviewRef"
+          :html-content="htmlContent"
+          :is-chart-visible="isPreviewVisible"
+          :placeholder-text="previewPlaceholderText"
+        />
       </div>
 
       <div class="right-column">
