@@ -372,7 +372,3 @@ renderChart(source_data);
 export function createSampleChartPartsMirroredMood() {
   return structuredClone(sampleChartPartsMirroredMoodTemplate);
 }
-
-export function sourceDataMirroredMoodToCode(sourceData) {
-  return `const source_data = ${JSON.stringify(sourceData, null, 2)};`;
-}

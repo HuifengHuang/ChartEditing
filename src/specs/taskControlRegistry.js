@@ -567,16 +567,6 @@ const TASK_DETAIL_REGISTRY = {
   },
 };
 
-const TARGET_TASK_REGISTRY = {
-  layout: ["aspect_ratio"],
-  style: ["color_theme"],
-  theme: ["color_theme"],
-  color: ["color_theme"],
-  data: ["element_edit"],
-  legend: ["legend_edit"],
-  controls: ["aspect_ratio", "color_theme", "element_edit", "legend_edit"],
-};
-
 export function getTaskPrimarySectionId(task) {
   return TASK_DETAIL_REGISTRY[task]?.primarySectionId || TASK_SECTION_REGISTRY[task]?.primarySectionId || "layout_primary";
 }
@@ -594,11 +584,6 @@ export function getAffectedControlConfig(bindingKey) {
 export function getTaskDetailSectionIds(task) {
   const sectionIds = TASK_DETAIL_REGISTRY[task]?.detailSectionIds || [];
   return safeClone(sectionIds);
-}
-
-export function getTasksByTarget(target) {
-  const tasks = TARGET_TASK_REGISTRY[target] || [];
-  return safeClone(tasks);
 }
 
 export function getSectionTemplateById(sectionId) {

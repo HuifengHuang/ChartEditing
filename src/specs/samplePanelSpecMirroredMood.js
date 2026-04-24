@@ -1,4 +1,3 @@
-/** @type {import("./samplePanelSpec").samplePanelSpec | any} */
 export const samplePanelSpecMirroredMood = {
   panelId: "mirrored_mood_panel_v1",
   title: "Visual panels",
