@@ -455,7 +455,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-item.user .chat-content {
-  text-align: right;
+  text-align: left;
 }
 
 .chat-bubble {
