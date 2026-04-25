@@ -3,21 +3,38 @@ import { computed, nextTick, ref } from "vue";
 import UserInput from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
-import {
-  createSampleChartPartsMirroredMood,
-} from "./data/sampleChartPartsMirroredMood";
+import presetChart from "./data/preset_chart.json";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
 import { parseIntent as parseIntentByRule } from "./utils/parseIntent";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
 import { applyUpdatePlan } from "./utils/applyUpdatePlan";
+import { runtimeModeConfig } from "./config/runtimeModeConfig.js";
 import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
 import { generateChartHtmlFromImage } from "./llm/chartCodeGeneratorLLM.js";
 import { htmlToChartParts } from "./utils/htmlToChartParts.js";
 
-const parts = ref(createSampleChartPartsMirroredMood());
+function createEmptyChartParts() {
+  return {
+    source_data: {},
+    html_template: {
+      title: "Chart Preview",
+      import_script: "",
+      render_script: "",
+    },
+  };
+}
 
-// 创建“空控件面板”状态：保留基础 uiState，清空 section 内容。
+function createChartPartsFromPresetChart() {
+  return {
+    source_data: structuredClone(presetChart.source_data || {}),
+    html_template: {
+      title: presetChart.title || "Chart Preview",
+      import_script: presetChart.import_script || "",
+      render_script: presetChart.render_script || "",
+    },
+  };
+}
 
 function createEmptyPanelSpec() {
   const base = structuredClone(samplePanelSpecMirroredMood);
@@ -29,19 +46,22 @@ function createEmptyPanelSpec() {
   return base;
 }
 
+const parts = ref(
+  runtimeModeConfig.isDevelopment
+    ? createChartPartsFromPresetChart()
+    : createEmptyChartParts()
+);
 const panelSpec = ref(createEmptyPanelSpec());
 const chartPreviewRef = ref(null);
 
 const busy = ref(false);
 const llmResponseTick = ref(0);
 const toasts = ref([]);
-const isPreviewVisible = ref(true);
-const previewPlaceholderText = ref("No chart entered");
+const isPreviewVisible = ref(runtimeModeConfig.isDevelopment);
+const previewPlaceholderText = ref(runtimeModeConfig.isDevelopment ? "" : "No chart entered");
 let toastSeed = 0;
 
 const htmlContent = computed(() => buildChartHtml(parts.value));
-
-// 统一消息提示入口，负责入队和自动回收。
 
 function pushToast(message, type = "info", timeoutMs = 2800) {
   const text = String(message || "").trim();
@@ -55,7 +75,6 @@ function pushToast(message, type = "info", timeoutMs = 2800) {
   }, timeoutMs);
 }
 
-// 将多种返回形态统一为意图数组，便于后续顺序执行。
 function ensureIntentArray(rawIntents) {
   if (Array.isArray(rawIntents)) {
     return rawIntents.filter((item) => item && typeof item === "object");
@@ -66,7 +85,6 @@ function ensureIntentArray(rawIntents) {
   return [];
 }
 
-// 组织给 LLM 的上下文信息，帮助模型理解当前编辑态。
 function buildIntentContext() {
   const sections = panelSpec.value?.sections || [];
   const sectionSummary = sections.map((section) => ({
@@ -78,12 +96,7 @@ function buildIntentContext() {
   return {
     chartType: "mirrored horizontal bar chart",
     fields: ["month", "waitingArea", "corridor"],
-    supportedTasks: [
-      "aspect_ratio",
-      "color_theme",
-      "element_edit",
-      "legend_edit",
-    ],
+    supportedTasks: ["aspect_ratio", "color_theme", "element_edit", "legend_edit"],
     panelSummary: {
       sectionCount: sections.length,
       sections: sectionSummary,
@@ -93,7 +106,6 @@ function buildIntentContext() {
   };
 }
 
-// 从当前预览区域抓图，提供给视觉意图解析。
 async function captureCurrentChartImage() {
   await nextTick();
   const captureFn = chartPreviewRef.value?.captureChartImageBase64;
@@ -103,15 +115,21 @@ async function captureCurrentChartImage() {
   return captureFn();
 }
 
-// 解析意图：优先“图文 LLM”，失败降级“文本 LLM”，再失败降级规则解析。
 async function resolveIntent({ prompt, userImageBase64 = null }) {
+  if (runtimeModeConfig.isDevelopment) {
+    const intents = ensureIntentArray(parseIntentByRule(prompt));
+    pushToast("Development mode: skip LLM parser and use local rule parser.", "info");
+    return intents;
+  }
+
   const context = buildIntentContext();
-  let imageBase64 = typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
+  let imageBase64 =
+    typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
 
   if (!imageBase64) {
     try {
       imageBase64 = await captureCurrentChartImage();
-    } catch (error) {
+    } catch {
       imageBase64 = null;
     }
   }
@@ -132,7 +150,7 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
       "info"
     );
     return intents;
-  } catch (visionError) {
+  } catch {
     if (imageBase64) {
       try {
         const intents = ensureIntentArray(
@@ -144,7 +162,7 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
         );
         pushToast("Visual parse failed, text-only LLM succeeded.", "warning");
         return intents;
-      } catch (textError) {
+      } catch {
         pushToast("LLM failed (vision + text-only), fallback to rule parser.", "warning");
         return ensureIntentArray(parseIntentByRule(prompt));
       }
@@ -155,9 +173,7 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
   }
 }
 
-// 处理文本输入：解析意图并把意图转成可执行更新。
 async function handlePromptSubmit(payload) {
-  // busy 期间不接收新请求，避免状态并发覆盖。
   if (busy.value) {
     return;
   }
@@ -175,6 +191,7 @@ async function handlePromptSubmit(payload) {
     typeof normalizedPayload.imageBase64 === "string" && normalizedPayload.imageBase64.trim()
       ? normalizedPayload.imageBase64.trim()
       : null;
+
   if (!prompt) {
     return;
   }
@@ -190,7 +207,6 @@ async function handlePromptSubmit(payload) {
 
     let nextParts = parts.value;
     let nextPanelSpec = panelSpec.value;
-    // 多意图按用户提及顺序串行应用，保证可预期。
     intents.forEach((intent) => {
       const updatePlan = intentToUpdatePlan(intent, nextParts, nextPanelSpec);
       const nextState = applyUpdatePlan(nextParts, nextPanelSpec, updatePlan);
@@ -211,9 +227,7 @@ async function handlePromptSubmit(payload) {
   }
 }
 
-// 处理图片输入：图片 -> HTML -> chart parts -> 替换当前运行模板。
 async function handleImageUploaded(payload) {
-  // 图片链路与文本链路共用 busy 锁，保证一次只跑一条主流程。
   if (busy.value) {
     return;
   }
@@ -222,30 +236,39 @@ async function handleImageUploaded(payload) {
     typeof payload?.imageBase64 === "string" && payload.imageBase64.trim()
       ? payload.imageBase64.trim()
       : "";
-  // 用户没带图时，尝试用当前图表截图补足视觉信息。
+
   if (!imageBase64) {
     pushToast("Image data is missing.", "warning");
     return;
   }
 
-  // 处理中暂时隐藏预览，显示明确状态文案。
+  if (runtimeModeConfig.isDevelopment) {
+    parts.value = createChartPartsFromPresetChart();
+    panelSpec.value = createEmptyPanelSpec();
+    isPreviewVisible.value = true;
+    previewPlaceholderText.value = "";
+    llmResponseTick.value += 1;
+    pushToast("Development mode: loaded preset_chart.json without LLM call.", "info");
+    return;
+  }
+
   busy.value = true;
   isPreviewVisible.value = false;
   previewPlaceholderText.value = "Analyzing image and generating chart...";
+  let generated = false;
 
-  // 第一优先：图文联合解析。
   try {
-    // 上传图片后走双阶段 LLM：先生成 HTML，再抽取可编辑模板结构。
     const htmlText = await generateChartHtmlFromImage({ imageBase64 });
     const generatedParts = await htmlToChartParts(htmlText);
     parts.value = generatedParts;
     panelSpec.value = createEmptyPanelSpec();
+    generated = true;
     pushToast("Chart template generated from uploaded image.", "success");
   } catch (error) {
     pushToast(error?.message || "Failed to generate chart from image.", "error", 4200);
   } finally {
-    isPreviewVisible.value = true;
-    previewPlaceholderText.value = "No chart entered";
+    isPreviewVisible.value = generated;
+    previewPlaceholderText.value = generated ? "" : "No chart entered";
     llmResponseTick.value += 1;
     busy.value = false;
   }

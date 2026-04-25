@@ -1,0 +1,134 @@
+{
+  "title": "Patient Mood Scores",
+  "import_script": "<script src=\"https://cdn.jsdelivr.net/npm/d3@7\"></script>",
+  "source_data": {
+    "width": 700,
+    "height": 740,
+    "background": "#f5f1f0",
+    "fontFamily": "Arial, Helvetica, sans-serif",
+    "data": [
+      {
+        "month": "2023-01",
+        "waitingArea": 4.2,
+        "corridor": 3.8
+      },
+      {
+        "month": "2023-02",
+        "waitingArea": 4.5,
+        "corridor": 4.1
+      },
+      {
+        "month": "2023-03",
+        "waitingArea": 5.1,
+        "corridor": 4.7
+      },
+      {
+        "month": "2023-04",
+        "waitingArea": 5.8,
+        "corridor": 5.3
+      },
+      {
+        "month": "2023-05",
+        "waitingArea": 6.2,
+        "corridor": 5.9
+      },
+      {
+        "month": "2023-06",
+        "waitingArea": 6.7,
+        "corridor": 6.3
+      },
+      {
+        "month": "2023-07",
+        "waitingArea": 7.1,
+        "corridor": 6.8
+      },
+      {
+        "month": "2023-08",
+        "waitingArea": 7.5,
+        "corridor": 7.2
+      },
+      {
+        "month": "2023-09",
+        "waitingArea": 7.9,
+        "corridor": 7.6
+      },
+      {
+        "month": "2023-10",
+        "waitingArea": 8.3,
+        "corridor": 8.0
+      },
+      {
+        "month": "2023-11",
+        "waitingArea": 8.6,
+        "corridor": 8.3
+      },
+      {
+        "month": "2023-12",
+        "waitingArea": 8.9,
+        "corridor": 8.6
+      }
+    ],
+    "text": {
+      "leftLegend": "Waiting Area",
+      "rightLegend": "Corridor",
+      "titleLine1": "Patient Mood Scores Rise After",
+      "titleLine2": "Public Art Installation",
+      "subtitleLine1": "Average mood scores improve consistently in waiting areas and",
+      "subtitleLine2": "corridors through 2023 following public art installations."
+    },
+    "layout": {
+      "chartTop": 135,
+      "chartLeftPadding": 70,
+      "chartRightPadding": 70,
+      "centerGap": 52,
+      "barHeight": 25,
+      "rowGap": 11,
+      "maxBarWidth": 190,
+      "leftLegendX": 185,
+      "rightLegendX": 460,
+      "legendY": 72,
+      "legendBoxSize": 12,
+      "legendTextOffset": 18,
+      "monthLabelYOffset": 18,
+      "valueLabelOffset": 8,
+      "titleY": 600,
+      "subtitleY": 678
+    },
+    "styles": {
+      "leftBar": {
+        "fill": "#C95F54"
+      },
+      "rightBar": {
+        "fill": "#F0C65E"
+      },
+      "legend": {
+        "textFill": "#333333",
+        "fontSize": "16px",
+        "fontWeight": 400
+      },
+      "monthLabel": {
+        "fill": "#333333",
+        "fontSize": "14px",
+        "fontWeight": 400
+      },
+      "valueLabel": {
+        "fill": "#333333",
+        "fontSize": "14px",
+        "fontWeight": 400
+      },
+      "title": {
+        "fill": "#444444",
+        "fontSize": "30px",
+        "fontWeight": 700,
+        "lineHeight": 34
+      },
+      "subtitle": {
+        "fill": "#444444",
+        "fontSize": "14px",
+        "fontWeight": 400,
+        "lineHeight": 20
+      }
+    }
+  },
+  "render_script": "d3.select(\"body\")\n  .style(\"margin\", \"0\")\n  .style(\"font-family\", source_data.fontFamily)\n  .style(\"display\", \"flex\")\n  .style(\"justify-content\", \"center\")\n  .style(\"align-items\", \"flex-start\");\n\nconst svg = d3.select(\"body\")\n  .append(\"svg\")\n  .attr(\"width\", source_data.width)\n  .attr(\"height\", source_data.height)\n  .attr(\"viewBox\", `0 0 ${source_data.width} ${source_data.height}`);\n\nsvg.append(\"rect\")\n  .attr(\"x\", 0)\n  .attr(\"y\", 0)\n  .attr(\"width\", source_data.width)\n  .attr(\"height\", source_data.height)\n  .attr(\"fill\", source_data.background);\n\nconst { width, data, text, layout, styles } = source_data;\nconst centerX = width / 2;\nconst leftBarEndX = centerX - layout.centerGap / 2;\nconst rightBarStartX = centerX + layout.centerGap / 2;\nconst maxValue = d3.max(data, (d) => Math.max(d.waitingArea, d.corridor));\nconst xScale = d3.scaleLinear().domain([0, maxValue]).range([0, layout.maxBarWidth]);\n\nconst legendGroup = svg.append(\"g\");\nlegendGroup\n  .append(\"rect\")\n  .attr(\"x\", layout.leftLegendX)\n  .attr(\"y\", layout.legendY)\n  .attr(\"width\", layout.legendBoxSize)\n  .attr(\"height\", layout.legendBoxSize)\n  .attr(\"fill\", styles.leftBar.fill);\nlegendGroup\n  .append(\"text\")\n  .attr(\"x\", layout.leftLegendX + layout.legendTextOffset)\n  .attr(\"y\", layout.legendY + layout.legendBoxSize - 1)\n  .attr(\"fill\", styles.legend.textFill)\n  .style(\"font-size\", styles.legend.fontSize)\n  .style(\"font-weight\", styles.legend.fontWeight)\n  .text(text.leftLegend);\nlegendGroup\n  .append(\"rect\")\n  .attr(\"x\", layout.rightLegendX)\n  .attr(\"y\", layout.legendY)\n  .attr(\"width\", layout.legendBoxSize)\n  .attr(\"height\", layout.legendBoxSize)\n  .attr(\"fill\", styles.rightBar.fill);\nlegendGroup\n  .append(\"text\")\n  .attr(\"x\", layout.rightLegendX + layout.legendTextOffset)\n  .attr(\"y\", layout.legendY + layout.legendBoxSize - 1)\n  .attr(\"fill\", styles.legend.textFill)\n  .style(\"font-size\", styles.legend.fontSize)\n  .style(\"font-weight\", styles.legend.fontWeight)\n  .text(text.rightLegend);\n\nconst rows = svg.append(\"g\");\ndata.forEach((d, i) => {\n  const y = layout.chartTop + i * (layout.barHeight + layout.rowGap);\n  const leftWidth = xScale(d.waitingArea);\n  const rightWidth = xScale(d.corridor);\n  const leftX = leftBarEndX - leftWidth;\n\n  rows\n    .append(\"rect\")\n    .attr(\"x\", leftX)\n    .attr(\"y\", y)\n    .attr(\"width\", leftWidth)\n    .attr(\"height\", layout.barHeight)\n    .attr(\"fill\", styles.leftBar.fill);\n  rows\n    .append(\"rect\")\n    .attr(\"x\", rightBarStartX)\n    .attr(\"y\", y)\n    .attr(\"width\", rightWidth)\n    .attr(\"height\", layout.barHeight)\n    .attr(\"fill\", styles.rightBar.fill);\n  rows\n    .append(\"text\")\n    .attr(\"x\", leftX - layout.valueLabelOffset)\n    .attr(\"y\", y + layout.monthLabelYOffset)\n    .attr(\"text-anchor\", \"end\")\n    .attr(\"fill\", styles.valueLabel.fill)\n    .style(\"font-size\", styles.valueLabel.fontSize)\n    .style(\"font-weight\", styles.valueLabel.fontWeight)\n    .text(d.waitingArea % 1 === 0 ? d.waitingArea.toFixed(0) : d.waitingArea.toFixed(1));\n  rows\n    .append(\"text\")\n    .attr(\"x\", centerX)\n    .attr(\"y\", y + layout.monthLabelYOffset)\n    .attr(\"text-anchor\", \"middle\")\n    .attr(\"fill\", styles.monthLabel.fill)\n    .style(\"font-size\", styles.monthLabel.fontSize)\n    .style(\"font-weight\", styles.monthLabel.fontWeight)\n    .text(d.month);\n  rows\n    .append(\"text\")\n    .attr(\"x\", rightBarStartX + rightWidth + layout.valueLabelOffset)\n    .attr(\"y\", y + layout.monthLabelYOffset)\n    .attr(\"text-anchor\", \"start\")\n    .attr(\"fill\", styles.valueLabel.fill)\n    .style(\"font-size\", styles.valueLabel.fontSize)\n    .style(\"font-weight\", styles.valueLabel.fontWeight)\n    .text(d.corridor % 1 === 0 ? d.corridor.toFixed(0) : d.corridor.toFixed(1));\n});\n\nconst title = svg\n  .append(\"text\")\n  .attr(\"x\", centerX)\n  .attr(\"y\", layout.titleY)\n  .attr(\"text-anchor\", \"middle\")\n  .attr(\"fill\", styles.title.fill)\n  .style(\"font-size\", styles.title.fontSize)\n  .style(\"font-weight\", styles.title.fontWeight);\ntitle.append(\"tspan\").attr(\"x\", centerX).attr(\"dy\", 0).text(text.titleLine1);\ntitle.append(\"tspan\").attr(\"x\", centerX).attr(\"dy\", styles.title.lineHeight).text(text.titleLine2);\n\nconst subtitle = svg\n  .append(\"text\")\n  .attr(\"x\", centerX)\n  .attr(\"y\", layout.subtitleY)\n  .attr(\"text-anchor\", \"middle\")\n  .attr(\"fill\", styles.subtitle.fill)\n  .style(\"font-size\", styles.subtitle.fontSize)\n  .style(\"font-weight\", styles.subtitle.fontWeight);\nsubtitle.append(\"tspan\").attr(\"x\", centerX).attr(\"dy\", 0).text(text.subtitleLine1);\nsubtitle.append(\"tspan\").attr(\"x\", centerX).attr(\"dy\", styles.subtitle.lineHeight).text(text.subtitleLine2);"
+}
