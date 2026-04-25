@@ -14,8 +14,8 @@ function createAbortSignal(timeoutMs) {
 }
 
 // 通过后端代理调用大模型：构建提示词、发起请求、解析并校验返回结果。
-async function parseIntentWithYizhanProxy({ prompt, context, sourceData, imageBase64 }) {
-  const promptText = buildIntentPrompt({ prompt, sourceData, context });
+async function parseIntentWithYizhanProxy({ prompt, sourceData, imageBase64 }) {
+  const promptText = buildIntentPrompt({ prompt, sourceData });
   const normalizedImageBase64 =
     typeof imageBase64 === "string" && imageBase64.trim() ? imageBase64.trim() : null;
   const timeout = createAbortSignal(llmConfig.timeoutMs);
@@ -29,7 +29,6 @@ async function parseIntentWithYizhanProxy({ prompt, context, sourceData, imageBa
       body: JSON.stringify({
         prompt,
         promptText,
-        context,
         sourceData,
         imageBase64: normalizedImageBase64,
         provider: "yizhan",
@@ -58,13 +57,11 @@ async function parseIntentWithYizhanProxy({ prompt, context, sourceData, imageBa
 // 对外统一入口：返回可直接用于后续更新流程的 intents。
 export async function parseIntentWithLLM({
   prompt,
-  context,
   sourceData,
   imageBase64 = null,
 }) {
   return parseIntentWithYizhanProxy({
     prompt,
-    context,
     sourceData,
     imageBase64,
   });

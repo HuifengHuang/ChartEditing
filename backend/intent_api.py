@@ -1,7 +1,10 @@
 import json
 import os
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 import requests
 from flask import Flask, jsonify, request
@@ -11,18 +14,83 @@ try:
 except ModuleNotFoundError:
     CORS = None
 
+BASE_DIR = Path(__file__).resolve().parent
+DOTENV_PATH = BASE_DIR / ".env"
+MODEL_LOG_READABLE_PATH = BASE_DIR / "logs" / "model_calls_readable.log"
+
 try:
     from dotenv import load_dotenv
 
-    BASE_DIR = Path(__file__).resolve().parent
-    DOTENV_PATH = BASE_DIR / ".env"
     load_dotenv(DOTENV_PATH)
 except Exception:
-    DOTENV_PATH = Path(__file__).resolve().parent / ".env"
+    pass
 
 
 DEFAULT_API_URL = "https://api.shunyu.tech/v1/chat/completions"
 FIXED_MODEL = "gpt-5.3-codex"
+
+
+def now_iso_utc() -> str:
+    """返回 UTC ISO 时间字符串，统一日志时间格式。"""
+    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+
+
+def append_model_log(entry: Dict[str, Any]) -> None:
+    """将单条模型调用日志写入可读日志文件。"""
+    append_model_log_readable(entry)
+
+
+def _pretty_json(value: Any) -> str:
+    """将对象格式化为便于阅读的 JSON 文本。"""
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    except Exception:
+        return str(value)
+
+
+def _normalize_multiline_text(value: Any) -> str:
+    """将文本中的转义换行符还原为真实换行，便于日志直观阅读。"""
+    text = str(value or "")
+    return text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+
+
+def append_model_log_readable(entry: Dict[str, Any]) -> None:
+    """将日志以多行文本格式写入，便于人工查看 prompt/返回内容。"""
+    try:
+        MODEL_LOG_READABLE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with MODEL_LOG_READABLE_PATH.open("a", encoding="utf-8") as log_file:
+            log_file.write("\n" + "=" * 90 + "\n")
+            log_file.write(f"time: {entry.get('timestamp', '')}\n")
+            log_file.write(f"event: {entry.get('event', '')}\n")
+            log_file.write(f"request_id: {entry.get('request_id', '')}\n")
+            if "model" in entry:
+                log_file.write(f"model: {entry.get('model', '')}\n")
+            if "status_code" in entry:
+                log_file.write(f"status_code: {entry.get('status_code', '')}\n")
+            if "duration_ms" in entry:
+                log_file.write(f"duration_ms: {entry.get('duration_ms', '')}\n")
+
+            prompt_text = entry.get("prompt_text")
+            if isinstance(prompt_text, str):
+                log_file.write("\n[prompt_text]\n")
+                log_file.write(prompt_text.rstrip() + "\n")
+
+            content = entry.get("content")
+            if isinstance(content, str):
+                log_file.write("\n[content]\n")
+                log_file.write(_normalize_multiline_text(content).rstrip() + "\n")
+
+            if "error" in entry:
+                log_file.write("\n[error]\n")
+                log_file.write(str(entry.get("error", "")).rstrip() + "\n")
+
+            if "source_data" in entry:
+                log_file.write("\n[source_data]\n")
+                log_file.write(_pretty_json(entry.get("source_data")) + "\n")
+
+    except Exception:
+        # 可读日志写入失败不影响主流程。
+        pass
 
 
 def get_api_config() -> Dict[str, str]:
@@ -88,22 +156,57 @@ def create_app() -> Flask:
     @app.post("/api/intent-parse")
     def intent_parse():
         """接收前端 prompt + 图片，转发给大模型并返回 raw_text。"""
+        started_at = time.time()
+        request_id = f"intent_{uuid4().hex}"
+
         body = request.get_json(silent=True) or {}
         prompt = str(body.get("prompt", "")).strip()
         prompt_text = str(body.get("promptText", "")).strip() or prompt
         image_base64 = body.get("imageBase64")
+        source_data = body.get("sourceData")
+
+        append_model_log(
+            {
+                "event": "intent_parse_request",
+                "request_id": request_id,
+                "timestamp": now_iso_utc(),
+                "prompt": prompt,
+                "prompt_text": prompt_text,
+                "source_data": source_data,
+                "has_image": bool(image_base64),
+                "image_base64_length": len(image_base64) if isinstance(image_base64, str) else 0,
+            }
+        )
 
         if not prompt_text:
-            return jsonify({"error": "prompt is required"}), 400
+            append_model_log(
+                {
+                    "event": "intent_parse_error",
+                    "request_id": request_id,
+                    "timestamp": now_iso_utc(),
+                    "error": "prompt is required",
+                }
+            )
+            return jsonify({"error": "prompt is required", "request_id": request_id}), 400
 
         config = get_api_config()
         if not config["api_key"]:
+            append_model_log(
+                {
+                    "event": "intent_parse_error",
+                    "request_id": request_id,
+                    "timestamp": now_iso_utc(),
+                    "model": config["model"],
+                    "error": "YIZHAN_API_KEY is not set",
+                }
+            )
             return (
                 jsonify(
                     {
                         "error": "YIZHAN_API_KEY is not set",
                         "hint": "Set env var YIZHAN_API_KEY or create backend/.env based on backend/.env.example",
                         "dotenv_path": str(DOTENV_PATH),
+                        "request_id": request_id,
                     }
                 ),
                 500,
@@ -118,20 +221,55 @@ def create_app() -> Flask:
                 image_base64=image_base64,
             )
         except requests.RequestException as exc:
-            return jsonify({"error": f"Request to Yizhan API failed: {exc}"}), 502
+            append_model_log(
+                {
+                    "event": "intent_parse_error",
+                    "request_id": request_id,
+                    "timestamp": now_iso_utc(),
+                    "model": config["model"],
+                    "error": f"Request to Yizhan API failed: {exc}",
+                    "duration_ms": int((time.time() - started_at) * 1000),
+                }
+            )
+            return jsonify({"error": f"Request to Yizhan API failed: {exc}", "request_id": request_id}), 502
 
         try:
             response_json = response.json()
         except ValueError:
-            return jsonify({"error": "Upstream response is not valid JSON"}), 502
+            append_model_log(
+                {
+                    "event": "intent_parse_error",
+                    "request_id": request_id,
+                    "timestamp": now_iso_utc(),
+                    "model": config["model"],
+                    "status_code": response.status_code,
+                    "error": "Upstream response is not valid JSON",
+                    "response_text": response.text,
+                    "duration_ms": int((time.time() - started_at) * 1000),
+                }
+            )
+            return jsonify({"error": "Upstream response is not valid JSON", "request_id": request_id}), 502
 
         if response.status_code >= 400:
+            append_model_log(
+                {
+                    "event": "intent_parse_error",
+                    "request_id": request_id,
+                    "timestamp": now_iso_utc(),
+                    "model": config["model"],
+                    "status_code": response.status_code,
+                    "error": "Yizhan API returned error",
+                    "upstream": response_json,
+                    "duration_ms": int((time.time() - started_at) * 1000),
+                }
+            )
             return (
                 jsonify(
                     {
                         "error": "Yizhan API returned error",
                         "status_code": response.status_code,
                         "upstream": response_json,
+                        "request_id": request_id,
                     }
                 ),
                 502,
@@ -153,12 +291,24 @@ def create_app() -> Flask:
         except Exception:
             raw_text = ""
 
+        append_model_log(
+            {
+                "event": "intent_parse_response",
+                "request_id": request_id,
+                "timestamp": now_iso_utc(),
+                "model": config["model"],
+                "content": raw_text,
+                "duration_ms": int((time.time() - started_at) * 1000),
+            }
+        )
+
         return jsonify(
             {
                 "ok": True,
                 "raw_text": raw_text,
                 "model": config["model"],
                 "upstream": response_json,
+                "request_id": request_id,
             }
         )
 

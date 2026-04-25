@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, toRaw } from "vue";
 import UserInput from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
@@ -45,6 +45,18 @@ function createEmptyPanelSpec() {
   return base;
 }
 
+function safeDeepClone(value, fallback = {}) {
+  try {
+    return structuredClone(toRaw(value));
+  } catch {
+    try {
+      return JSON.parse(JSON.stringify(toRaw(value)));
+    } catch {
+      return fallback;
+    }
+  }
+}
+
 const parts = ref(
   runtimeModeConfig.isDevelopment
     ? createChartPartsFromPresetChart()
@@ -84,27 +96,6 @@ function ensureIntentArray(rawIntents) {
   return [];
 }
 
-function buildIntentContext() {
-  const sections = panelSpec.value?.sections || [];
-  const sectionSummary = sections.map((section) => ({
-    sectionId: section.sectionId,
-    priority: section.priority,
-    controlIds: (section.controls || []).map((control) => control.id),
-  }));
-
-  return {
-    chartType: "mirrored horizontal bar chart",
-    fields: ["month", "waitingArea", "corridor"],
-    supportedTasks: ["aspect_ratio", "color_theme", "element_edit", "legend_edit"],
-    panelSummary: {
-      sectionCount: sections.length,
-      sections: sectionSummary,
-      expandedSections: panelSpec.value?.uiState?.expandedSections || [],
-      highlightedSectionId: panelSpec.value?.uiState?.highlightedSectionId || null,
-    },
-  };
-}
-
 async function captureCurrentChartImage() {
   await nextTick();
   const captureFn = chartPreviewRef.value?.captureChartImageBase64;
@@ -115,8 +106,7 @@ async function captureCurrentChartImage() {
 }
 
 async function resolveIntent({ prompt, userImageBase64 = null }) {
-  const context = buildIntentContext();
-  const sourceData = structuredClone(parts.value?.source_data || {});
+  const sourceData = safeDeepClone(parts.value?.source_data, {});
   let imageBase64 =
     typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
 
@@ -132,7 +122,6 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
     const intents = ensureIntentArray(
       await parseIntentWithLLM({
         prompt,
-        context,
         sourceData,
         imageBase64,
       })
@@ -151,7 +140,6 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
         const intents = ensureIntentArray(
           await parseIntentWithLLM({
             prompt,
-            context,
             sourceData,
             imageBase64: null,
           })
