@@ -1,9 +1,11 @@
 import { createDefaultIntentSpec } from "../specs/intentSchema.js";
 
+// 判断文本中是否包含任一关键词。
 function containsAny(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
+// 将正则提取到的年月规范化为 `YYYY-MM`。
 function normalizeMonth(monthMatch) {
   if (!monthMatch) {
     return null;
@@ -13,11 +15,13 @@ function normalizeMonth(monthMatch) {
   return `${year}-${month}`;
 }
 
+// 从用户输入中提取月份。
 function extractMonth(prompt) {
   const match = prompt.match(/(20\d{2})\s*[-/.年]\s*(0[1-9]|1[0-2])/);
   return normalizeMonth(match);
 }
 
+// 提取宽高比（如 16:9），返回高/宽。
 function extractRatio(prompt) {
   const match = prompt.match(/(\d+(?:\.\d+)?)\s*[:：/]\s*(\d+(?:\.\d+)?)/);
   if (!match) {
@@ -31,6 +35,7 @@ function extractRatio(prompt) {
   return right / left;
 }
 
+// 提取潜在数值参数（如新增数据的值），并做基础过滤。
 function extractValueCandidates(prompt, month) {
   const cleaned = month ? prompt.replace(month, " ") : prompt;
   const matches = cleaned.match(/-?\d+(?:\.\d+)?/g) || [];
@@ -40,6 +45,7 @@ function extractValueCandidates(prompt, month) {
     .filter((value) => value < 1000);
 }
 
+// 生成意图唯一标识，便于前后续链路追踪。
 function createIntentId() {
   const random = Math.floor(Math.random() * 10000)
     .toString()
@@ -47,6 +53,7 @@ function createIntentId() {
   return `intent_${Date.now()}_${random}`;
 }
 
+// 判断用户是否明确要求“展开详情”。
 function detectDetailRequested(normalized) {
   return containsAny(normalized, [
     "展开",
@@ -65,6 +72,7 @@ function detectDetailRequested(normalized) {
   ]);
 }
 
+// 构建默认意图骨架，作为兜底返回。
 function createBaseIntent(rawPrompt) {
   const base = createDefaultIntentSpec();
   return {
@@ -74,6 +82,7 @@ function createBaseIntent(rawPrompt) {
   };
 }
 
+// 规则解析器：将自然语言映射为系统可执行的 IntentSpec。
 export function parseIntent(prompt) {
   const rawPrompt = String(prompt || "").trim();
   if (!rawPrompt) {
@@ -103,6 +112,7 @@ export function parseIntent(prompt) {
   const isAspect = containsAny(normalized, ["比例", "尺寸", "变高", "拉宽", "变宽", "高一点", "宽一点", "aspect ratio"]);
   const isColorTheme = containsAny(normalized, ["颜色", "配色", "色调", "风格", "主题", "theme", "黄色", "蓝色"]);
 
+  // 优先按任务类型分流：legend -> data -> aspect -> theme。
   if (isLegend) {
     const direction = containsAny(normalized, ["横", "横着", "水平", "horizontal"])
       ? "horizontal"

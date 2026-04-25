@@ -26,6 +26,7 @@ DEFAULT_MODEL = "qwen-vl-plus"
 
 
 def get_api_config() -> Dict[str, str]:
+    """读取一站 API 调用配置，并提供默认值回退。"""
     return {
         "api_key": os.getenv("YIZHAN_API_KEY", "").strip(),
         "api_url": os.getenv("YIZHAN_API_URL", DEFAULT_API_URL).strip() or DEFAULT_API_URL,
@@ -34,6 +35,7 @@ def get_api_config() -> Dict[str, str]:
 
 
 def build_content_items(prompt_text: str, image_base64: Optional[str]) -> List[Dict[str, Any]]:
+    """构建 messages.content：文本必选，图片可选。"""
     items: List[Dict[str, Any]] = [{"type": "text", "text": prompt_text}]
     if image_base64:
         image_url = f"data:image/png;base64,{image_base64}"
@@ -49,6 +51,7 @@ def call_yizhan_chat_completions(
     prompt_text: str,
     image_base64: Optional[str],
 ) -> requests.Response:
+    """请求上游 chat/completions，返回原始 HTTP 响应对象。"""
     headers = {
         "Accept": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -75,6 +78,7 @@ def call_yizhan_chat_completions(
 
 
 def create_app() -> Flask:
+    """创建 Flask 应用并挂载 `/api/intent-parse` 代理路由。"""
     app = Flask(__name__)
     if CORS is not None:
         CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -83,6 +87,7 @@ def create_app() -> Flask:
 
     @app.post("/api/intent-parse")
     def intent_parse():
+        """统一代理入口：接收前端 prompt/image，返回标准化 raw_text。"""
         body = request.get_json(silent=True) or {}
         prompt = str(body.get("prompt", "")).strip()
         prompt_text = str(body.get("promptText", "")).strip() or prompt
@@ -93,6 +98,7 @@ def create_app() -> Flask:
             return jsonify({"error": "prompt is required"}), 400
 
         config = get_api_config()
+        # 配置缺失时直接返回可操作提示，避免继续请求上游。
         if not config["api_key"]:
             return (
                 jsonify(
@@ -105,6 +111,7 @@ def create_app() -> Flask:
                 500,
             )
 
+        # 网络异常统一转为 502，便于前端识别“上游不可达”。
         try:
             response = call_yizhan_chat_completions(
                 api_key=config["api_key"],
@@ -116,11 +123,13 @@ def create_app() -> Flask:
         except requests.RequestException as exc:
             return jsonify({"error": f"Request to Yizhan API failed: {exc}"}), 502
 
+        # 上游必须返回 JSON，否则视为协议异常。
         try:
             response_json = response.json()
         except ValueError:
             return jsonify({"error": "Upstream response is not valid JSON"}), 502
 
+        # 上游状态异常时透传核心错误信息。
         if response.status_code >= 400:
             return (
                 jsonify(
@@ -133,6 +142,7 @@ def create_app() -> Flask:
                 502,
             )
 
+        # 兼容 content 为字符串或多段数组两种形态。
         raw_text = ""
         try:
             raw_content = response_json["choices"][0]["message"]["content"]

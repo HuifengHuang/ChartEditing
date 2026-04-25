@@ -1,3 +1,4 @@
+// 示例面板规格：定义“控件 -> source_data 路径”的可视化编辑映射。
 export const samplePanelSpecMirroredMood = {
   panelId: "mirrored_mood_panel_v1",
   title: "Visual panels",

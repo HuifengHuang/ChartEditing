@@ -27,6 +27,7 @@ const emit = defineEmits(["apply-patch", "add-item", "remove-item", "toggle-deta
 const removeSelection = ref("");
 const presetSelection = ref("");
 
+// 根据 visibilityCondition 动态决定控件是否显示。
 const isVisible = computed(() => {
   const condition = props.control.visibilityCondition;
   if (!condition) {
@@ -36,6 +37,7 @@ const isVisible = computed(() => {
   return currentValue === condition.equals;
 });
 
+// 读取控件绑定的集合数据；表格类型会自动确保集合存在。
 const collection = computed(() => {
   if (!props.control.targetCollection) {
     return [];
@@ -46,6 +48,7 @@ const collection = computed(() => {
   return getCollectionByPath(props.parts, props.control.targetCollection);
 });
 
+// 生成“删除项”下拉选项：优先使用显式 options，否则按 rowKey 自动推断。
 const removeOptions = computed(() => {
   if (!props.control.targetCollection) {
     return [];
@@ -67,6 +70,7 @@ const removeOptions = computed(() => {
   }));
 });
 
+// 删除选项变化时，保持 removeSelection 始终指向有效项。
 watch(
   removeOptions,
   (options) => {
@@ -81,6 +85,7 @@ watch(
   { immediate: true }
 );
 
+// 读取单绑定控件当前值，不存在时回退 defaultValue。
 const currentSingleValue = computed(() => {
   const control = props.control;
   if (!control.bind) {
@@ -93,6 +98,7 @@ const currentSingleValue = computed(() => {
   return value;
 });
 
+// 读取多绑定控件当前值：优先自定义 getter，其次 bind/binds。
 const currentMultiValue = computed(() => {
   const control = props.control;
   if (typeof control.multiValueGetter === "function") {
@@ -109,8 +115,10 @@ const currentMultiValue = computed(() => {
   return value === undefined ? control.defaultValue : value;
 });
 
+// 预设控件可选项。
 const presetOptions = computed(() => props.control.presetOptions || []);
 
+// 预设列表变化时，保证当前选中值有效。
 watch(
   presetOptions,
   (options) => {
@@ -125,10 +133,12 @@ watch(
   { immediate: true }
 );
 
+// 读取 range 配置项（min/max/step）。
 function getRangeAttr(name) {
   return props.control?.range?.[name];
 }
 
+// 将输入值按控件类型归一化为 number/boolean/string。
 function normalizeInputValue(value, valueType, controlType) {
   if (controlType === "toggle") {
     return Boolean(value);
@@ -143,17 +153,20 @@ function normalizeInputValue(value, valueType, controlType) {
   return value;
 }
 
+// 生成单字段更新补丁。
 function buildPatchForSingle(value) {
   return {
     [props.control.bind]: normalizeInputValue(value, props.control.valueType, props.control.controlType),
   };
 }
 
+// 生成多字段更新补丁：支持 mapper、select.patch、统一赋值三种模式。
 function buildPatchForMulti(value) {
   if (typeof props.control.multiValueMapper === "function") {
     return props.control.multiValueMapper(value, props.parts) || {};
   }
 
+  // select + options.patch 的场景，直接应用预设补丁。
   if (props.control.controlType === "select" && Array.isArray(props.control.options)) {
     const selected = props.control.options.find((option) => String(option.value) === String(value));
     if (selected?.patch && typeof selected.patch === "object") {
@@ -174,24 +187,29 @@ function buildPatchForMulti(value) {
   return patch;
 }
 
+// 发出 patch 事件给父组件。
 function emitPatch(patch) {
   emit("apply-patch", patch);
 }
 
+// 单值输入事件处理。
 function onSingleInput(event) {
   emitPatch(buildPatchForSingle(event.target.value));
 }
 
+// 开关输入事件处理。
 function onToggleInput(event) {
   emitPatch({
     [props.control.bind]: Boolean(event.target.checked),
   });
 }
 
+// 多值输入事件处理。
 function onMultiInput(event) {
   emitPatch(buildPatchForMulti(event.target.value));
 }
 
+// 预设输入事件处理。
 function onPresetInput(event) {
   const selectedPreset = presetOptions.value.find((preset) => preset.id === event.target.value);
   if (selectedPreset?.patch) {
@@ -199,6 +217,7 @@ function onPresetInput(event) {
   }
 }
 
+// 按 schema 生成新增项默认值。
 function buildItemFromSchema(control) {
   const base = { ...(control.initialValue || {}) };
   const schema = control.itemSchema || {};
@@ -219,6 +238,7 @@ function buildItemFromSchema(control) {
   return base;
 }
 
+// 触发“新增一项”。
 function onAddAction() {
   emit("add-item", {
     targetCollection: props.control.targetCollection,
@@ -226,6 +246,7 @@ function onAddAction() {
   });
 }
 
+// 触发“删除一项”。
 function onRemoveAction() {
   if (removeSelection.value === "") {
     return;
@@ -239,9 +260,11 @@ function onRemoveAction() {
   });
 }
 
+// 自动推断表格 schema（根据现有数据类型）。
 function inferAutoSchema(rows) {
   const colorHexPattern = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
+  // 根据样本值推断字段类型，优先 number/boolean/color。
   function detectValueType(value) {
     if (typeof value === "number" && Number.isFinite(value)) {
       return "number";
@@ -275,6 +298,7 @@ function inferAutoSchema(rows) {
   }));
 }
 
+// 将自动推断 schema 与手工 schema 合并（手工优先覆盖）。
 function mergeMixedSchema(autoSchema, manualSchema) {
   const map = new Map(autoSchema.map((entry) => [entry.key, { ...entry }]));
 
@@ -298,6 +322,7 @@ function mergeMixedSchema(autoSchema, manualSchema) {
   return Array.from(map.values());
 }
 
+// 计算最终表格列定义。
 const tableColumns = computed(() => {
   if (props.control.controlType !== "table") {
     return [];
@@ -319,6 +344,7 @@ const tableColumns = computed(() => {
   return autoSchema.filter((column) => !column.hidden);
 });
 
+// 计算表格方向：固定值优先，其次读取 orientationKey，默认 row-major。
 const tableOrientation = computed(() => {
   if (props.control.controlType !== "table") {
     return "row-major";
@@ -339,6 +365,7 @@ const tableOrientation = computed(() => {
   return "row-major";
 });
 
+// 自动模式下确保 orientationKey 有默认值，避免状态为空。
 watch(
   () => [props.control.controlType, props.control.tableOrientation, props.control.orientationKey],
   () => {
@@ -357,10 +384,12 @@ watch(
   { immediate: true }
 );
 
+// 标准化表格单元格输入值。
 function normalizeTableCellValue(rawValue, column) {
   return normalizeInputValue(rawValue, column.valueType, column.valueType);
 }
 
+// 表格单元格输入事件：转成 path patch。
 function onTableCellInput(rowIndex, column, rawValue) {
   const path = `${props.control.targetCollection}.${rowIndex}.${column.key}`;
   emitPatch({
@@ -368,6 +397,7 @@ function onTableCellInput(rowIndex, column, rawValue) {
   });
 }
 
+// 表格“加行”操作。
 function onTableAddRow() {
   emit("add-item", {
     targetCollection: props.control.targetCollection,
@@ -375,6 +405,7 @@ function onTableAddRow() {
   });
 }
 
+// 表格“删行”操作：优先 rowKey 匹配，否则按索引。
 function onTableRemoveRow(rowIndex, rowValue) {
   const rowKey = props.control.rowKey;
   emit("remove-item", {
@@ -387,6 +418,7 @@ function onTableRemoveRow(rowIndex, rowValue) {
   });
 }
 
+// 判断行级动作是否开启。
 function isRowActionEnabled(action) {
   return Array.isArray(props.control.rowActions) && props.control.rowActions.includes(action);
 }

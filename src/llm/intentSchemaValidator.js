@@ -5,10 +5,12 @@ const TYPE_SET = new Set(["style", "data"]);
 const STRATEGY_SET = new Set(["create", "extend", "reuse"]);
 const MAX_INTENT_COUNT = 6;
 
+// 将输入安全收敛为普通对象。
 function asObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
+// 校验并归一化单条 intent，保证字段可被后续流程消费。
 export function validateIntentSpec(rawIntent) {
   const base = createDefaultIntentSpec();
   const intent = asObject(rawIntent);
@@ -33,6 +35,7 @@ export function validateIntentSpec(rawIntent) {
   };
 }
 
+// 兼容不同返回结构：数组、{ intents: [] }、{ intent: {} }、单对象。
 function normalizeIntentCandidates(rawPayload) {
   if (Array.isArray(rawPayload)) {
     return rawPayload;
@@ -55,6 +58,7 @@ function normalizeIntentCandidates(rawPayload) {
   return [payload];
 }
 
+// 归一化并校验意图列表，数量做上限保护。
 export function validateIntentList(rawPayload) {
   const list = normalizeIntentCandidates(rawPayload)
     .filter((item) => item && typeof item === "object" && !Array.isArray(item))

@@ -1,3 +1,4 @@
+// 构建控件模板字典：作为任务分区和受影响控件映射的基础数据源。
 function createControlTemplates() {
   const controls = {
     aspect_ratio: {
@@ -422,6 +423,7 @@ function createControlTemplates() {
 
 const CONTROL_TEMPLATES = createControlTemplates();
 
+// 任务 -> 分区/控件 模板注册表。
 const TASK_SECTION_REGISTRY = {
   aspect_ratio: {
     primarySectionId: "layout_primary",
@@ -490,6 +492,7 @@ const TASK_SECTION_REGISTRY = {
   },
 };
 
+// 绑定路径 -> 受影响控件 注册表（用于联动展示细粒度控件）。
 const AFFECTED_CONTROL_REGISTRY = {
   "source_data.layout.svgWidth": {
     sectionId: "layout_detail",
@@ -613,10 +616,12 @@ const AFFECTED_CONTROL_REGISTRY = {
   },
 };
 
+// 深拷贝模板对象，避免调用方直接修改注册表常量。
 function safeClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+// 任务 -> 主分区/细节分区 注册表（用于展开逻辑）。
 const TASK_DETAIL_REGISTRY = {
   aspect_ratio: {
     primarySectionId: "layout_primary",
@@ -636,25 +641,30 @@ const TASK_DETAIL_REGISTRY = {
   },
 };
 
+// 获取任务主分区 id，不存在时回退到布局主分区。
 export function getTaskPrimarySectionId(task) {
   return TASK_DETAIL_REGISTRY[task]?.primarySectionId || TASK_SECTION_REGISTRY[task]?.primarySectionId || "layout_primary";
 }
 
+// 获取任务分区模板（深拷贝，避免外部修改注册表）。
 export function getTaskSections(task) {
   const sections = TASK_SECTION_REGISTRY[task]?.sections || [];
   return safeClone(sections);
 }
 
+// 根据绑定键获取受影响控件配置。
 export function getAffectedControlConfig(bindingKey) {
   const config = AFFECTED_CONTROL_REGISTRY[bindingKey];
   return config ? safeClone(config) : null;
 }
 
+// 获取任务对应的 detail 分区 id 列表。
 export function getTaskDetailSectionIds(task) {
   const sectionIds = TASK_DETAIL_REGISTRY[task]?.detailSectionIds || [];
   return safeClone(sectionIds);
 }
 
+// 根据 sectionId 在所有任务模板里查找分区模板。
 export function getSectionTemplateById(sectionId) {
   const tasks = Object.keys(TASK_SECTION_REGISTRY);
   for (const task of tasks) {

@@ -1,3 +1,4 @@
+// 示例图表模板：由可编辑 source_data + 可执行 main_script 两部分组成。
 const sampleChartPartsMirroredMoodTemplate = {
   source_data: {
     layout: {
@@ -87,6 +88,7 @@ const sampleChartPartsMirroredMoodTemplate = {
 <script>
 /*__SOURCE_DATA__*/
 
+// 数值清洗与限制：将输入转换为数字，并夹取到指定区间。
 function clampNumber(value, fallback, min, max) {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return fallback;
@@ -94,14 +96,17 @@ function clampNumber(value, fallback, min, max) {
   return max === undefined ? withMin : Math.min(max, withMin);
 }
 
+// 安全数组读取：不是数组则回退默认值。
 function asArray(value, fallback) {
   return Array.isArray(value) ? value : fallback;
 }
 
+// 安全对象读取：不是对象则回退默认值。
 function asObject(value, fallback) {
   return value && typeof value === "object" ? value : fallback;
 }
 
+// 统一长度值：数字补 px，字符串原样返回。
 function toCssLength(value, fallback) {
   if (value === undefined || value === null || value === "") {
     return fallback;
@@ -109,11 +114,13 @@ function toCssLength(value, fallback) {
   return typeof value === "number" ? value + "px" : String(value);
 }
 
+// 分数格式化：保留 1 位小数，去掉末尾 .0。
 function formatScore(value) {
   const safe = clampNumber(value, 0, 0, undefined);
   return safe.toFixed(1).replace(/\\.0$/, "");
 }
 
+// 将长文本按词拆行为多行文案（用于副标题换行）。
 function wrapTextByWords(text, maxCharsPerLine) {
   const normalized = String(text || "").trim().replace(/\\s+/g, " ");
   if (!normalized) {
@@ -140,6 +147,7 @@ function wrapTextByWords(text, maxCharsPerLine) {
   return lines;
 }
 
+// 主渲染函数：读取 source_data 并完成整张图的 D3 绘制。
 function renderChart(source_data) {
   const layout = asObject(source_data.layout, {});
   const style = asObject(source_data.style, {});
@@ -437,6 +445,7 @@ renderChart(source_data);
   `.trim(),
 };
 
+// 返回模板深拷贝，避免编辑时污染基准数据。
 export function createSampleChartPartsMirroredMood() {
   return structuredClone(sampleChartPartsMirroredMoodTemplate);
 }

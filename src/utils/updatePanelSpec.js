@@ -1,5 +1,6 @@
 import { getAffectedControlConfig, getSectionTemplateById, getTaskSections } from "../specs/taskControlRegistry.js";
 
+// 确保 uiState 结构完整，避免运行时访问空对象。
 function ensureUiState(panelSpec) {
   if (!panelSpec.uiState || typeof panelSpec.uiState !== "object") {
     panelSpec.uiState = {
@@ -12,16 +13,19 @@ function ensureUiState(panelSpec) {
   }
 }
 
+// 确保 sections 是可迭代数组。
 function ensureSections(panelSpec) {
   if (!Array.isArray(panelSpec.sections)) {
     panelSpec.sections = [];
   }
 }
 
+// 查找指定 section。
 function findSection(panelSpec, sectionId) {
   return (panelSpec.sections || []).find((section) => section.sectionId === sectionId);
 }
 
+// 按模板确保 section 存在；不存在则创建。
 function ensureSection(panelSpec, sectionTemplate) {
   let section = findSection(panelSpec, sectionTemplate.sectionId);
   if (!section) {
@@ -39,10 +43,12 @@ function ensureSection(panelSpec, sectionTemplate) {
   return section;
 }
 
+// 判断 section 中是否已有指定控件。
 function hasControl(section, controlId) {
   return (section.controls || []).some((control) => control.id === controlId);
 }
 
+// 追加控件并去重，返回是否插入成功。
 function appendControl(section, control) {
   if (!control?.id) {
     return false;
@@ -54,6 +60,7 @@ function appendControl(section, control) {
   return true;
 }
 
+// 根据控件影响策略，补充“受影响控件”到对应分区。
 function maybeApplyImpactControls(panelSpec, control) {
   if (!control || !Array.isArray(control.affectedBindings)) {
     return;
@@ -81,6 +88,7 @@ function maybeApplyImpactControls(panelSpec, control) {
   });
 }
 
+// 合并某任务对应的所有分区与控件。
 function mergeTaskSections(panelSpec, task) {
   const taskSections = getTaskSections(task);
 
@@ -95,6 +103,7 @@ function mergeTaskSections(panelSpec, task) {
   });
 }
 
+// 深拷贝兜底：优先 structuredClone，失败时回退 JSON。
 function safeClone(value) {
   try {
     return structuredClone(value);
@@ -103,6 +112,7 @@ function safeClone(value) {
   }
 }
 
+// 根据 panelUpdates 指令更新 panelSpec，输出新对象。
 export function updatePanelSpec(currentPanelSpec, panelUpdates) {
   const nextPanelSpec = safeClone(currentPanelSpec);
   ensureSections(nextPanelSpec);
@@ -118,6 +128,7 @@ export function updatePanelSpec(currentPanelSpec, panelUpdates) {
       return;
     }
 
+    // 扩展分区时：若分区不存在，尝试从注册表补模板。
     if (update.type === "expand-section") {
       if (!update.sectionId) {
         return;

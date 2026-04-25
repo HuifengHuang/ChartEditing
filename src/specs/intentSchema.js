@@ -44,6 +44,7 @@ export const SUPPORTED_INTENT_TASKS = [
   "legend_edit",
 ];
 
+// 创建默认意图对象：当解析失败或缺字段时用于兜底。
 export function createDefaultIntentSpec() {
   return {
     intentId: `intent_${Date.now()}`,

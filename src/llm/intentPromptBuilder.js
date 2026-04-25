@@ -1,3 +1,4 @@
+// 安全序列化上下文对象，避免循环引用导致异常。
 function safeJson(value) {
   try {
     return JSON.stringify(value, null, 2);
@@ -6,6 +7,7 @@ function safeJson(value) {
   }
 }
 
+// 构建给 LLM 的意图解析提示词，约束输出 JSON 结构。
 export function buildIntentPrompt({ prompt, context }) {
   const singleIntentSchema = `{
   "intentId": "string",

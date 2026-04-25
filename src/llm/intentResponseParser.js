@@ -1,3 +1,4 @@
+// 尝试直接 JSON.parse，失败返回 null。
 function tryParse(text) {
   try {
     return JSON.parse(text);
@@ -6,6 +7,7 @@ function tryParse(text) {
   }
 }
 
+// 从最外层括号区间提取 JSON（支持对象/数组）。
 function extractByBrackets(text, openChar, closeChar) {
   const content = String(text || "");
   const first = content.indexOf(openChar);
@@ -20,6 +22,7 @@ function extractByBrackets(text, openChar, closeChar) {
   return null;
 }
 
+// 从模型输出中提取 JSON：优先 fenced block，再尝试括号截取。
 function extractJsonBlock(text) {
   if (!text) {
     return null;
@@ -47,6 +50,7 @@ function extractJsonBlock(text) {
   return tryParse(content.trim());
 }
 
+// 解析意图响应：只接受对象形态的 JSON 负载。
 export function parseIntentResponse(rawText) {
   const parsed = extractJsonBlock(rawText);
   if (!parsed || typeof parsed !== "object") {

@@ -3,10 +3,12 @@ import {
   getTaskPrimarySectionId,
 } from "../specs/taskControlRegistry.js";
 
+// 判断某个 section 是否已存在于当前面板。
 function hasSection(panelSpec, sectionId) {
   return (panelSpec?.sections || []).some((section) => section.sectionId === sectionId);
 }
 
+// 确保某任务的主控件区域已在面板中，并按需高亮。
 function ensureTaskPanel(plan, currentPanelSpec, task, { highlight = true } = {}) {
   const sectionId = getTaskPrimarySectionId(task);
   if (hasSection(currentPanelSpec, sectionId)) {
@@ -19,6 +21,7 @@ function ensureTaskPanel(plan, currentPanelSpec, task, { highlight = true } = {}
   }
 }
 
+// 展开任务对应的细节分区。
 function expandTaskDetails(plan, task) {
   const detailSectionIds = getTaskDetailSectionIds(task);
   detailSectionIds.forEach((sectionId) => {
@@ -26,10 +29,12 @@ function expandTaskDetails(plan, task) {
   });
 }
 
+// 数值夹取，避免超出安全范围。
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+// 计算“改比例/改尺寸”时，需要同步更新的一组布局字段。
 function computeAspectRatioUpdates(parameters, currentParts) {
   const currentLayout = currentParts?.source_data?.layout || {};
   const currentWidth = Number(currentLayout.svgWidth) || 420;
@@ -52,6 +57,7 @@ function computeAspectRatioUpdates(parameters, currentParts) {
   nextWidth = clamp(nextWidth, 280, 1200);
   nextHeight = clamp(nextHeight, 320, 1200);
 
+  // 通过高度缩放比例联动标题、图表底边等纵向坐标。
   const oldHeight = currentHeight || 1;
   const scaleY = nextHeight / oldHeight;
   const nextChartBottom = Math.round((Number(currentLayout.chartBottom) || 382) * scaleY);
@@ -69,6 +75,7 @@ function computeAspectRatioUpdates(parameters, currentParts) {
   ];
 }
 
+// 根据主题提示词生成颜色补丁。
 function createThemePatchByHint(themeHint) {
   if (themeHint === "cool") {
     return {
@@ -112,6 +119,7 @@ function createThemePatchByHint(themeHint) {
   return null;
 }
 
+// 解析月份中的月序号（用于新增数据默认值推断）。
 function parseMonthAsIndex(monthText) {
   const match = String(monthText || "").match(/(20\d{2})-(0[1-9]|1[0-2])/);
   if (!match) {
@@ -120,6 +128,7 @@ function parseMonthAsIndex(monthText) {
   return Number(match[2]);
 }
 
+// 生成“新增数据行”的默认内容。
 function createAddedDataRow(parameters) {
   const month = parameters.month || "2024-01";
   const monthIndex = parseMonthAsIndex(month);
@@ -132,6 +141,7 @@ function createAddedDataRow(parameters) {
   };
 }
 
+// 在非固定图高模式下，数据条数变化后自动重算行间距。
 function maybeCreateAutoSpacingUpdate(currentParts, deltaCount) {
   const layout = currentParts?.source_data?.layout || {};
   const fixed = Boolean(layout.fixedChartSize);
@@ -148,6 +158,7 @@ function maybeCreateAutoSpacingUpdate(currentParts, deltaCount) {
   return { type: "set", path: "source_data.layout.rowStep", value: rowStep };
 }
 
+// 为旧数据补齐 tableOrientation，保证表格控件可稳定渲染。
 function ensureTableOrientationUpdate(plan, currentParts) {
   const orientation = currentParts?.source_data?.meta?.tableOrientation;
   if (orientation === "row-major" || orientation === "column-major") {
@@ -160,10 +171,12 @@ function ensureTableOrientationUpdate(plan, currentParts) {
   });
 }
 
+// 安全比较 action，避免空值引发误判。
 function isAction(intentSpec, action) {
   return String(intentSpec?.action || "") === action;
 }
 
+// 核心编排：把意图翻译成 source_data 更新 + panel 更新的执行计划。
 export function intentToUpdatePlan(intentSpec, currentParts, currentPanelSpec) {
   const plan = {
     sourceDataUpdates: [],

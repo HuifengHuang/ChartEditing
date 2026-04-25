@@ -18,6 +18,7 @@ const props = defineProps({
 
 const expandedDetailSections = ref(new Set());
 
+// 实时校验 panelSpec，问题用于日志与降级渲染。
 const validationResult = computed(() => validatePanelSpec(props.panelSpec));
 const unsupportedControlKeys = computed(() => getUnsupportedControlKeySet(validationResult.value.issues));
 const sectionMap = computed(() => {
@@ -28,6 +29,7 @@ const sectionMap = computed(() => {
   return map;
 });
 
+// 监听校验结果并输出告警，方便调试配置问题。
 watch(
   validationResult,
   (result) => {
@@ -47,6 +49,7 @@ watch(
   { immediate: true }
 );
 
+// 监听外部展开状态与默认配置，重建本地 detail 展开集合。
 watch(
   () => [props.panelSpec.sections, props.panelSpec.uiState?.expandedSections],
   ([sections, expandedSections]) => {
@@ -68,6 +71,7 @@ watch(
   { immediate: true }
 );
 
+// 将 section 渲染成“主分区 + 挂载 detail 分区”的块结构。
 const renderSectionBlocks = computed(() => {
   const sections = props.panelSpec.sections || [];
   const attachedDetailIds = new Set();
@@ -122,6 +126,7 @@ const renderSectionBlocks = computed(() => {
   return blocks;
 });
 
+// 应用 patch 到 parts（path -> value）。
 function applyPatch(patch) {
   if (!patch || typeof patch !== "object") {
     return;
@@ -132,6 +137,7 @@ function applyPatch(patch) {
   });
 }
 
+// 集合新增事件转发。
 function onAddItem(payload) {
   if (!payload?.targetCollection) {
     return;
@@ -139,6 +145,7 @@ function onAddItem(payload) {
   addItemToCollection(props.parts, payload.targetCollection, payload.item || {});
 }
 
+// 集合删除事件转发。
 function onRemoveItem(payload) {
   if (!payload?.targetCollection) {
     return;
@@ -146,6 +153,7 @@ function onRemoveItem(payload) {
   removeItemFromCollection(props.parts, payload.targetCollection, payload.matcher);
 }
 
+// 切换 detail 分区展开/收起。
 function toggleDetailSection(sectionId) {
   if (!sectionMap.value.has(sectionId)) {
     return;
@@ -159,10 +167,12 @@ function toggleDetailSection(sectionId) {
   expandedDetailSections.value = next;
 }
 
+// 判断控件是否属于“不支持配置”集合。
 function isUnsupported(sectionId, controlId) {
   return unsupportedControlKeys.value.has(`${sectionId}::${controlId}`);
 }
 
+// 判断当前分区块是否应高亮（主分区或其 detail 被命中都算）。
 function isBlockHighlighted(block) {
   const highlightedSectionId = props.panelSpec?.uiState?.highlightedSectionId;
   if (!highlightedSectionId) {

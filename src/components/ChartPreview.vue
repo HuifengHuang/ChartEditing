@@ -18,6 +18,7 @@ const props = defineProps({
 
 const iframeRef = ref(null);
 
+// 导出当前预览中的完整 HTML 文件，便于离线查看与复现。
 function exportChartHtml() {
   const html = String(props.htmlContent || "").trim();
   if (!html) {
@@ -36,6 +37,7 @@ function exportChartHtml() {
   URL.revokeObjectURL(url);
 }
 
+// 等待 iframe 文档加载完成，避免读取内容时机过早。
 function waitForFrameLoad(frame, timeoutMs = 1500) {
   return new Promise((resolve) => {
     if (!frame) {
@@ -63,6 +65,7 @@ function waitForFrameLoad(frame, timeoutMs = 1500) {
   });
 }
 
+// 将 SVG 转为 PNG base64，用于发送给视觉模型。
 function svgToPngBase64(svgElement) {
   return new Promise((resolve, reject) => {
     const clone = svgElement.cloneNode(true);
@@ -91,6 +94,7 @@ function svgToPngBase64(svgElement) {
       reject(new Error("Failed to create canvas context"));
       return;
     }
+    // 补一层白底，避免透明背景导出后在部分模型中识别不稳定。
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
 
@@ -105,6 +109,7 @@ function svgToPngBase64(svgElement) {
   });
 }
 
+// 对外暴露：抓取当前图表快照（base64）。
 async function captureChartImageBase64() {
   const frame = iframeRef.value;
   if (!frame) {

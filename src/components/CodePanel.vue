@@ -34,6 +34,7 @@ let rebuildStatusTimerId = null;
 let rebuildStatusMessageId = null;
 let processingStatusMessageId = null;
 
+// 统一追加聊天消息并返回消息 id，便于后续更新/删除。
 function pushMessage(role, content, options = {}) {
   const message = {
     id: `msg_${Date.now()}_${messageSeed.value++}`,
@@ -45,6 +46,7 @@ function pushMessage(role, content, options = {}) {
   return message.id;
 }
 
+// 通过 id 删除消息。
 function removeMessageById(messageId) {
   if (!messageId) {
     return;
@@ -52,11 +54,13 @@ function removeMessageById(messageId) {
   messages.value = messages.value.filter((item) => item.id !== messageId);
 }
 
+// 清理“处理中”状态消息，避免与最终回复重叠。
 function clearProcessingStatusMessage() {
   removeMessageById(processingStatusMessageId);
   processingStatusMessageId = null;
 }
 
+// 当本轮请求结束后补发最终回复提示。
 function maybeSendFinalReply() {
   if (!waitingFinalReply.value) {
     return;
@@ -69,6 +73,7 @@ function maybeSendFinalReply() {
   waitingFinalReply.value = false;
 }
 
+// 监听父组件的 LLM 完成信号，驱动聊天状态收敛。
 watch(
   () => props.llmResponseTick,
   (nextValue, prevValue) => {
@@ -85,6 +90,7 @@ watch(
   }
 );
 
+// 发送文本指令到父组件，并管理会话状态消息。
 function submitPrompt() {
   const value = chatInput.value.trim();
   if (!value || props.busy || isRebuilding.value) {
@@ -101,6 +107,7 @@ function submitPrompt() {
   llmCompletedForTurn.value = false;
   clearProcessingStatusMessage();
 
+  // 1 秒后若仍未完成，展示“处理中”占位消息。
   introReplyTimerId = setTimeout(() => {
     if (!waitingFinalReply.value || llmCompletedForTurn.value) {
       introReplyTimerId = null;
@@ -121,6 +128,7 @@ function submitPrompt() {
   chatInput.value = "";
 }
 
+// 清空上传图片的本地状态与输入框。
 function clearUploadedImage() {
   uploadedImageDataUrl.value = "";
   uploadedImageBase64.value = "";
@@ -131,6 +139,7 @@ function clearUploadedImage() {
   }
 }
 
+// 按 id 局部更新消息对象（用于 loading -> 完成态切换）。
 function updateMessageById(messageId, updater) {
   const index = messages.value.findIndex((item) => item.id === messageId);
   if (index < 0) {
@@ -141,6 +150,7 @@ function updateMessageById(messageId, updater) {
   messages.value[index] = next;
 }
 
+// 显示“图表重建中”状态消息，并在延迟后自动收尾。
 function showRebuildStatusMessage() {
   isRebuilding.value = true;
 
@@ -169,6 +179,7 @@ function showRebuildStatusMessage() {
   }, REBUILD_DELAY_MS);
 }
 
+// 触发系统文件选择器。
 function triggerImagePicker() {
   if (props.busy || !imageFileInputRef.value) {
     return;
@@ -177,6 +188,7 @@ function triggerImagePicker() {
   imageFileInputRef.value.click();
 }
 
+// 处理用户选择图片后的读取、校验与事件上报。
 function onImageSelected(event) {
   const file = event?.target?.files?.[0];
   if (!file) {
@@ -204,6 +216,7 @@ function onImageSelected(event) {
     uploadedImageDataUrl.value = dataUrl;
     uploadedImageBase64.value = base64;
     uploadedImageName.value = file.name || "uploaded-image";
+    // 上传图片后立即通知父组件，同时在本地会话区显示重建进度。
     emit("image-uploaded", {
       imageBase64: uploadedImageBase64.value,
       imageName: uploadedImageName.value,
@@ -217,6 +230,7 @@ function onImageSelected(event) {
   reader.readAsDataURL(file);
 }
 
+// 组件卸载时清理所有定时器与临时消息，防止内存泄漏。
 onBeforeUnmount(() => {
   if (introReplyTimerId) {
     clearTimeout(introReplyTimerId);

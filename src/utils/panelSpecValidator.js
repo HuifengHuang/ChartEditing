@@ -1,12 +1,16 @@
+// 统一构造校验问题对象，便于日志和 UI 展示。
 function createIssue(level, message, sectionId, controlId) {
   return { level, message, sectionId, controlId };
 }
 
+// 判空工具：用于校验必填字段。
 function hasValue(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
+// 校验单个控件配置是否合法。
 function validateControl(control, sectionId, issues) {
+  // 先做通用必填项校验，再进入分类型校验。
   const requiredFields = ["id", "label", "controlType", "operationType", "bindingMode"];
   requiredFields.forEach((field) => {
     if (!hasValue(control?.[field])) {
@@ -53,6 +57,7 @@ function validateControl(control, sectionId, issues) {
   }
 }
 
+// 校验整份 panelSpec，返回 { isValid, issues }。
 export function validatePanelSpec(panelSpec) {
   const issues = [];
   const requiredFields = ["panelId", "title", "panelKind", "intentType", "sections"];
@@ -89,6 +94,7 @@ export function validatePanelSpec(panelSpec) {
   };
 }
 
+// 提取不支持控件的 key 集合，用于前端按控件维度降级显示。
 export function getUnsupportedControlKeySet(issues) {
   const set = new Set();
   issues
