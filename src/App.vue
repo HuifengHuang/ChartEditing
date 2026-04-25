@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from "vue";
-import CodePanel from "./components/CodePanel.vue";
+import UserInput from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
 import {
@@ -271,7 +271,7 @@ async function handleImageUploaded(payload) {
 
     <section class="workbench-grid">
       <div class="left-column">
-        <CodePanel
+        <UserInput
           :busy="busy"
           :llm-response-tick="llmResponseTick"
           @submit-prompt="handlePromptSubmit"

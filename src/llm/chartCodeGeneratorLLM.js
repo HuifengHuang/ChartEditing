@@ -1,18 +1,26 @@
 ﻿import { llmConfig } from "../config/llmConfig.js";
 
 const IMAGE_TO_HTML_PROMPT =
-  "根据这个图表图片，生成一份完整的html代码，要求如下： 1、使用D3.js绘图 2、不要写css，样式使用D3 3、将可能会修改的所有数据和所有样式，统一定义在一个变量中。";
+  "根据这个图表图片，生成一份完整的html代码，要求如下： " +
+  "1、使用D3.js绘图 " +
+  "2、不要写css，样式使用D3实现 " +
+  "3、将可能会修改的所有数据和所有样式，统一定义在 source_data 变量中。" +
+  "4、不要输出任何解释说明，直接给我html代码。";
 
-const HTML_TO_SOURCE_DATA_PROMPT_HEADER = [
+const HTML_TO_TEMPLATE_PARTS_PROMPT_HEADER = [
   "你将收到一段完整的 HTML 图表代码。",
-  "请完成两个任务：",
-  "1) 提取可编辑的数据与样式变量，整理为 source_data 对象。",
-  "2) 删除脚本中 source_data 的定义语句，返回删除后的脚本代码（保持其他逻辑不变）。",
+  "请提取以下四个字段，并只返回严格 JSON：",
+  "1) title：HTML 的标题文本（不含 <title> 标签）。",
+  "2) import_script：需要放在 <head> 中的脚本引入字符串（可多行 script 标签）。",
+  "3) source_data：可编辑数据与样式对象（必须是对象）。",
+  "4) render_script：图表渲染脚本（必须是字符串，且不要包含 const source_data = ... 定义）。",
+  "关键要求：render_script 必须包含绘图所需 DOM 的创建代码（例如 svg/container 创建），不能依赖 body 中已有静态标签。",
   "输出要求：",
-  "- 只能输出严格 JSON，不要输出 Markdown。",
-  "- JSON 结构必须是：{\"source_data\": {...}, \"cleaned_inline_script\": \"...\"}",
-  "- source_data 必须是对象，cleaned_inline_script 必须是字符串。",
-  "下面是待处理的 HTML：",
+  "- 只能输出 JSON，不要 Markdown，不要解释。",
+  "- JSON 结构必须是：{\"title\":\"...\",\"import_script\":\"...\",\"source_data\":{...},\"render_script\":\"...\"}",
+  "- title/import_script/render_script 都必须是字符串；source_data 必须是对象。",
+  "- import_script 为空时返回空字符串。",
+  "以下是待处理 HTML：",
 ].join("\n");
 
 // 统一创建带超时的 AbortSignal。
@@ -37,7 +45,6 @@ function extractJsonBlock(rawText) {
     return "";
   }
 
-  // 一些模型会包 Markdown 代码块，这里先解包再解析。
   const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   if (fenced) {
     return fenced[1].trim();
@@ -52,11 +59,17 @@ function extractJsonBlock(rawText) {
   return text;
 }
 
-// 统一的代理请求函数：图像生成 HTML、HTML 提取 source_data 都复用它。
+// 去除模型可能返回的 ```code fence``` 包装。
+function stripCodeFence(rawText) {
+  const text = String(rawText || "").trim();
+  const fenced = text.match(/^```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```$/);
+  return fenced ? fenced[1].trim() : text;
+}
+
+// 统一的代理请求函数：图像生成 HTML、HTML 字段提取都复用它。
 async function requestYizhan({ promptText, context = {}, imageBase64 = null }) {
   const timeout = createAbortSignal(llmConfig.timeoutMs);
   try {
-    // 同一代理端点，通过 context.task 区分不同任务。
     const response = await fetch(llmConfig.endpoint, {
       method: "POST",
       headers: {
@@ -108,40 +121,44 @@ export async function generateChartHtmlFromImage({ imageBase64 }) {
   });
 }
 
-// 第二阶段：输入 HTML，让 LLM 抽取 source_data 并返回去定义后的脚本。
-export async function extractSourceDataFromHtmlWithLLM({ html }) {
+// 第二阶段：输入完整 HTML，提取模板四段字段。
+export async function extractHtmlTemplatePartsWithLLM({ html }) {
   const normalizedHtml = typeof html === "string" ? html.trim() : "";
   if (!normalizedHtml) {
     throw new Error("HTML input is required.");
   }
 
-  // 要求模型只返回 JSON，便于前端做严格解析。
-  const promptText = `${HTML_TO_SOURCE_DATA_PROMPT_HEADER}\n${normalizedHtml}`;
+  const promptText = `${HTML_TO_TEMPLATE_PARTS_PROMPT_HEADER}\n${normalizedHtml}`;
   const rawText = await requestYizhan({
     promptText,
-    context: { task: "extract_source_data_from_html" },
+    context: { task: "extract_html_template_parts" },
     imageBase64: null,
   });
 
   const jsonText = extractJsonBlock(rawText);
-  // 这里必须是严格 JSON，失败直接抛错阻断后续流程。
   let parsed;
   try {
     parsed = JSON.parse(jsonText);
   } catch (error) {
-    throw new Error("LLM source_data extraction returned invalid JSON.");
+    throw new Error("LLM html template extraction returned invalid JSON.");
   }
 
+  const title = typeof parsed?.title === "string" ? parsed.title.trim() : "";
+  const importScript = stripCodeFence(parsed?.import_script);
+  const renderScript = stripCodeFence(parsed?.render_script);
   const sourceData = parsed?.source_data;
-  const cleanedInlineScript = parsed?.cleaned_inline_script;
 
   if (!sourceData || typeof sourceData !== "object" || Array.isArray(sourceData)) {
-    throw new Error("LLM source_data extraction missing source_data object.");
+    throw new Error("LLM html template extraction missing source_data object.");
+  }
+  if (!renderScript) {
+    throw new Error("LLM html template extraction missing render_script.");
   }
 
-  // 深拷贝一份，避免后续误改原始解析对象。
   return {
+    title: title || "Chart Preview",
+    import_script: importScript,
     source_data: JSON.parse(JSON.stringify(sourceData)),
-    cleaned_inline_script: typeof cleanedInlineScript === "string" ? cleanedInlineScript.trim() : "",
+    render_script: renderScript,
   };
 }

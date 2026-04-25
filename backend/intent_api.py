@@ -22,7 +22,7 @@ except Exception:
 
 
 DEFAULT_API_URL = "https://api.shunyu.tech/v1/chat/completions"
-DEFAULT_MODEL = "qwen-vl-plus"
+FIXED_MODEL = "gpt-5.3-codex"
 
 
 def get_api_config() -> Dict[str, str]:
@@ -30,7 +30,7 @@ def get_api_config() -> Dict[str, str]:
     return {
         "api_key": os.getenv("YIZHAN_API_KEY", "").strip(),
         "api_url": os.getenv("YIZHAN_API_URL", DEFAULT_API_URL).strip() or DEFAULT_API_URL,
-        "model": os.getenv("YIZHAN_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL,
+        "model": FIXED_MODEL,
     }
 
 
