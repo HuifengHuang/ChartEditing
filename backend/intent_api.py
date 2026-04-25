@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import requests
 from flask import Flask, jsonify, request
+from common import parse_output_to_panel_json
 
 try:
     from flask_cors import CORS
@@ -76,11 +77,6 @@ def append_model_log_readable(entry: Dict[str, Any]) -> None:
             if "duration_ms" in entry:
                 log_file.write(f"duration_ms: {entry.get('duration_ms', '')}\n")
 
-            prompt_text = entry.get("prompt_text")
-            if isinstance(prompt_text, str):
-                log_file.write("\n[prompt_text]\n")
-                log_file.write(_normalize_multiline_text(prompt_text).rstrip() + "\n")
-
             content = entry.get("content")
             if isinstance(content, str):
                 log_file.write("\n[content]\n")
@@ -90,9 +86,21 @@ def append_model_log_readable(entry: Dict[str, Any]) -> None:
                 log_file.write("\n[error]\n")
                 log_file.write(str(entry.get("error", "")).rstrip() + "\n")
 
-            if "source_data" in entry:
-                log_file.write("\n[source_data]\n")
-                log_file.write(_pretty_json(entry.get("source_data")) + "\n")
+            if "panel_parse_input" in entry:
+                log_file.write("\n[panel_parse_input]\n")
+                panel_parse_input = entry.get("panel_parse_input")
+                if isinstance(panel_parse_input, str):
+                    log_file.write(_normalize_multiline_text(panel_parse_input).rstrip() + "\n")
+                else:
+                    log_file.write(_pretty_json(panel_parse_input) + "\n")
+
+            if "panel_parse_output" in entry:
+                log_file.write("\n[panel_parse_output]\n")
+                panel_parse_output = entry.get("panel_parse_output")
+                if isinstance(panel_parse_output, str):
+                    log_file.write(_normalize_multiline_text(panel_parse_output).rstrip() + "\n")
+                else:
+                    log_file.write(_pretty_json(panel_parse_output) + "\n")
 
     except Exception:
         # 可读日志写入失败不影响主流程。
@@ -170,7 +178,6 @@ def create_app() -> Flask:
         prompt_text = str(body.get("promptText", "")).strip() or prompt
         image_base64 = body.get("imageBase64")
         provider = str(body.get("provider", "intent_decompose")).strip() or "intent_decompose"
-        source_data = body.get("sourceData")
         request_event = f"{provider}_request"
         error_event = f"{provider}_error"
         response_event = f"{provider}_response"
@@ -179,13 +186,8 @@ def create_app() -> Flask:
             "event": request_event,
             "request_id": request_id,
             "timestamp": now_iso_utc(),
-            "prompt": prompt,
-            "prompt_text": prompt_text,
             "has_image": bool(image_base64),
-            "image_base64_length": len(image_base64) if isinstance(image_base64, str) else 0,
         }
-        if provider != "recommendation" and source_data is not None:
-            request_log["source_data"] = source_data
         append_model_log(request_log)
 
         if not prompt_text:
@@ -301,6 +303,69 @@ def create_app() -> Flask:
         except Exception:
             raw_text = ""
 
+        recommendation_json: Optional[Dict[str, Any]] = None
+        panel_json: Optional[Dict[str, Any]] = None
+        if provider == "recommendation":
+            try:
+                recommendation_json = json.loads(raw_text)
+            except Exception as exc:
+                append_model_log(
+                    {
+                        "event": error_event,
+                        "request_id": request_id,
+                        "timestamp": now_iso_utc(),
+                        "model": config["model"],
+                        "error": f"Recommendation response is not valid JSON: {exc}",
+                        "content": raw_text,
+                        "duration_ms": int((time.time() - started_at) * 1000),
+                    }
+                )
+                return (
+                    jsonify(
+                        {
+                            "error": "Recommendation response is not valid JSON",
+                            "request_id": request_id,
+                        }
+                    ),
+                    502,
+                )
+
+            try:
+                panel_json = parse_output_to_panel_json(recommendation_json)
+            except Exception as exc:
+                append_model_log(
+                    {
+                        "event": error_event,
+                        "request_id": request_id,
+                        "timestamp": now_iso_utc(),
+                        "model": config["model"],
+                        "error": f"Failed to parse recommendation output to panel JSON: {exc}",
+                        "panel_parse_input": recommendation_json,
+                        "duration_ms": int((time.time() - started_at) * 1000),
+                    }
+                )
+                return (
+                    jsonify(
+                        {
+                            "error": "Failed to parse recommendation output to panel JSON",
+                            "request_id": request_id,
+                        }
+                    ),
+                    502,
+                )
+
+            append_model_log(
+                {
+                    "event": f"{provider}_panel_transform",
+                    "request_id": request_id,
+                    "timestamp": now_iso_utc(),
+                    "model": config["model"],
+                    "panel_parse_input": recommendation_json,
+                    "panel_parse_output": panel_json,
+                    "duration_ms": int((time.time() - started_at) * 1000),
+                }
+            )
+
         append_model_log(
             {
                 "event": response_event,
@@ -312,15 +377,19 @@ def create_app() -> Flask:
             }
         )
 
-        return jsonify(
-            {
-                "ok": True,
-                "raw_text": raw_text,
-                "model": config["model"],
-                "upstream": response_json,
-                "request_id": request_id,
-            }
-        )
+        response_payload: Dict[str, Any] = {
+            "ok": True,
+            "raw_text": raw_text,
+            "model": config["model"],
+            "upstream": response_json,
+            "request_id": request_id,
+        }
+        if recommendation_json is not None:
+            response_payload["recommendation_json"] = recommendation_json
+        if panel_json is not None:
+            response_payload["panel_json"] = panel_json
+
+        return jsonify(response_payload)
 
     return app
 

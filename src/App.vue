@@ -118,6 +118,7 @@ async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
     intents,
     intentDecomposeJson,
     recommendationJson: recommendationResult?.recommendationJson || {},
+    panelJson: recommendationResult?.panelJson || null,
   };
 }
 

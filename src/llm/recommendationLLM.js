@@ -47,10 +47,20 @@ export async function parseRecommendationWithLLM({
       throw new Error("Recommendation LLM response is empty.");
     }
 
-    const recommendationJson = parseRecommendationResponse(rawText);
+    const recommendationJson =
+      payload?.recommendation_json &&
+      typeof payload.recommendation_json === "object" &&
+      !Array.isArray(payload.recommendation_json)
+        ? payload.recommendation_json
+        : parseRecommendationResponse(rawText);
+    const panelJson =
+      payload?.panel_json && typeof payload.panel_json === "object" && !Array.isArray(payload.panel_json)
+        ? payload.panel_json
+        : null;
     return {
       rawText,
       recommendationJson,
+      panelJson,
     };
   } finally {
     timeout.clear();
