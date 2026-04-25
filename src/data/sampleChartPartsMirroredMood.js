@@ -7,36 +7,6 @@ const sampleChartPartsMirroredMoodTemplate = {
       </div>
     </div>
   `.trim(),
-  css: `
-    :root {
-      color-scheme: light;
-    }
-
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-
-    #page-wrap {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 18px;
-      box-sizing: border-box;
-    }
-
-    #card {
-      width: fit-content;
-      border-radius: 0;
-      box-shadow: none;
-    }
-
-    svg text {
-      font-family: Arial, Helvetica, sans-serif;
-    }
-  `,
   source_data: {
     layout: {
       svgWidth: 420,
@@ -67,6 +37,21 @@ const sampleChartPartsMirroredMoodTemplate = {
       { month: "2023-12", waitingArea: 8.9, corridor: 8.6 },
     ],
     style: {
+      rootColorScheme: "light",
+      globalFontFamily: "Arial, Helvetica, sans-serif",
+      htmlMargin: 0,
+      htmlPadding: 0,
+      bodyMargin: 0,
+      bodyPadding: 0,
+      pageMinHeight: "100vh",
+      pageDisplay: "grid",
+      pagePlaceItems: "center",
+      pagePadding: 18,
+      pageBoxSizing: "border-box",
+      cardWidth: "fit-content",
+      cardBorderRadius: 0,
+      cardBoxShadow: "none",
+      svgTextFontFamily: "Arial, Helvetica, sans-serif",
       waitingAreaColor: "#c75b4e",
       corridorColor: "#efc45a",
       textMidColor: "#666666",
@@ -77,22 +62,21 @@ const sampleChartPartsMirroredMoodTemplate = {
       cardBackgroundColor: "#ffffff",
     },
     legend: {
-      legendItems: [
-        { id: "waiting", label: "Waiting Area", color: "#c75b4e" },
-        { id: "corridor", label: "Corridor", color: "#efc45a" },
-      ],
+      items: {
+        waiting: { id: "waiting", label: "Waiting Area", color: "#c75b4e" },
+        corridor: { id: "corridor", label: "Corridor", color: "#efc45a" },
+      },
       legendFontSize: 12,
       legendPosition: "top-center",
       legendDirection: "horizontal",
       legendOffsetY: 24,
     },
     title: {
-      titleLines: ["Patient Mood Scores Rise After", "Public Art Installation"],
+      titleLine1: "Patient Mood Scores Rise After",
+      titleLine2: "Public Art Installation",
       content: "Average mood scores improve consistently in waiting areas andcorridors through 2023 following public art installations.",
-      subtitleLines: [
-        "Average mood scores improve consistently in waiting areas and",
-        "corridors through 2023 following public art installations.",
-      ],
+      subtitleLine1: "Average mood scores improve consistently in waiting areas and",
+      subtitleLine2: "corridors through 2023 following public art installations.",
       titleFontSize: 22,
       subtitleFontSize: 12,
     },
@@ -115,6 +99,13 @@ function asArray(value, fallback) {
 
 function asObject(value, fallback) {
   return value && typeof value === "object" ? value : fallback;
+}
+
+function toCssLength(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  return typeof value === "number" ? value + "px" : String(value);
 }
 
 function formatScore(value) {
@@ -177,21 +168,70 @@ function renderChart(source_data) {
   const subtitleColor = style.subtitleColor || "#808080";
   const backgroundColor = style.backgroundColor || "#f3f3f3";
   const cardBackgroundColor = style.cardBackgroundColor || "#ffffff";
+  const rootColorScheme = String(style.rootColorScheme || "light");
+  const globalFontFamily = style.globalFontFamily || "Arial, Helvetica, sans-serif";
+  const htmlMargin = toCssLength(style.htmlMargin, "0px");
+  const htmlPadding = toCssLength(style.htmlPadding, "0px");
+  const bodyMargin = toCssLength(style.bodyMargin, "0px");
+  const bodyPadding = toCssLength(style.bodyPadding, "0px");
+  const pageMinHeight = toCssLength(style.pageMinHeight, "100vh");
+  const pageDisplay = style.pageDisplay || "grid";
+  const pagePlaceItems = style.pagePlaceItems || "center";
+  const pagePadding = toCssLength(style.pagePadding, "18px");
+  const pageBoxSizing = style.pageBoxSizing || "border-box";
+  const cardWidth = style.cardWidth || "fit-content";
+  const cardBorderRadius = toCssLength(style.cardBorderRadius, "0px");
+  const cardBoxShadow = style.cardBoxShadow || "none";
+  const svgTextFontFamily = style.svgTextFontFamily || globalFontFamily;
 
-  const legendItems = asArray(legend.legendItems, [
-    { id: "waiting", label: "Waiting Area", color: waitingAreaColor },
-    { id: "corridor", label: "Corridor", color: corridorColor },
-  ]);
+  const legacyLegendItems = asArray(legend.legendItems, []);
+  const legendItemsObject = asObject(legend.items, {});
+  const defaultLegendItems = {
+    waiting: { id: "waiting", label: "Waiting Area", color: waitingAreaColor },
+    corridor: { id: "corridor", label: "Corridor", color: corridorColor },
+  };
+  const normalizedLegendItemsObject =
+    Object.keys(legendItemsObject).length > 0
+      ? legendItemsObject
+      : legacyLegendItems.length
+        ? {
+            waiting: asObject(legacyLegendItems[0], defaultLegendItems.waiting),
+            corridor: asObject(legacyLegendItems[1], defaultLegendItems.corridor),
+          }
+        : defaultLegendItems;
+  const legendItems = Object.keys(normalizedLegendItemsObject)
+    .map(function(key) {
+      return asObject(normalizedLegendItemsObject[key], null);
+    })
+    .filter(function(item) {
+      return Boolean(item);
+    });
   const legendFontSize = clampNumber(legend.legendFontSize, 12, 9, 24);
   const legendPosition = legend.legendPosition || "top-center";
   const legendDirection = legend.legendDirection === "vertical" ? "vertical" : "horizontal";
   const legendOffsetY = clampNumber(legend.legendOffsetY, 24, 8, 80);
 
-  const titleLines = asArray(title.titleLines, ["Mirrored Mood Chart"]);
+  const legacyTitleLines = asArray(title.titleLines, []);
+  const titleLine1 = String(title.titleLine1 || legacyTitleLines[0] || "Mirrored Mood Chart");
+  const titleLine2 = String(title.titleLine2 || legacyTitleLines[1] || "").trim();
+  const titleLines = [titleLine1];
+  if (titleLine2) {
+    titleLines.push(titleLine2);
+  }
   const content = typeof title.content === "string" ? title.content : "";
+  const legacySubtitleLines = asArray(title.subtitleLines, []);
+  const subtitleLine1 = String(title.subtitleLine1 || legacySubtitleLines[0] || "").trim();
+  const subtitleLine2 = String(title.subtitleLine2 || legacySubtitleLines[1] || "").trim();
+  const subtitleLinesFromFields = [];
+  if (subtitleLine1) {
+    subtitleLinesFromFields.push(subtitleLine1);
+  }
+  if (subtitleLine2) {
+    subtitleLinesFromFields.push(subtitleLine2);
+  }
   const subtitleLines = content.trim()
     ? wrapTextByWords(content, 56)
-    : asArray(title.subtitleLines, []);
+    : subtitleLinesFromFields;
   const titleFontSize = clampNumber(title.titleFontSize, 22, 10, 48);
   const subtitleFontSize = clampNumber(title.subtitleFontSize, 12, 8, 28);
 
@@ -208,14 +248,40 @@ function renderChart(source_data) {
     }) || 1;
   const x = d3.scaleLinear().domain([0, maxValue]).range([0, barMaxLen]);
 
-  const wrap = d3.select("#page-wrap").style("background", backgroundColor);
-  const card = d3.select("#card").style("background", cardBackgroundColor).style("width", svgWidth + "px");
+  d3.select(":root").style("color-scheme", rootColorScheme);
+
+  d3.select("html")
+    .style("margin", htmlMargin)
+    .style("padding", htmlPadding)
+    .style("font-family", globalFontFamily);
+
+  d3.select("body")
+    .style("margin", bodyMargin)
+    .style("padding", bodyPadding)
+    .style("font-family", globalFontFamily);
+
+  const wrap = d3
+    .select("#page-wrap")
+    .style("min-height", pageMinHeight)
+    .style("display", pageDisplay)
+    .style("place-items", pagePlaceItems)
+    .style("padding", pagePadding)
+    .style("box-sizing", pageBoxSizing)
+    .style("background", backgroundColor);
+
+  const card = d3
+    .select("#card")
+    .style("background", cardBackgroundColor)
+    .style("width", cardWidth)
+    .style("border-radius", cardBorderRadius)
+    .style("box-shadow", cardBoxShadow);
 
   const svg = d3
     .select("#chart")
     .attr("width", svgWidth)
     .attr("height", svgHeight)
-    .attr("viewBox", "0 0 " + svgWidth + " " + svgHeight);
+    .attr("viewBox", "0 0 " + svgWidth + " " + svgHeight)
+    .style("font-family", svgTextFontFamily);
 
   svg.selectAll("*").remove();
 
