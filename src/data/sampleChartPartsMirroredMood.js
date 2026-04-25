@@ -1,12 +1,4 @@
 const sampleChartPartsMirroredMoodTemplate = {
-  import_script: '<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>',
-  body: `
-    <div id="page-wrap">
-      <div id="card">
-        <svg id="chart" role="img" aria-label="Mirrored horizontal bar chart"></svg>
-      </div>
-    </div>
-  `.trim(),
   source_data: {
     layout: {
       svgWidth: 420,
@@ -85,7 +77,16 @@ const sampleChartPartsMirroredMoodTemplate = {
       aspectRatioPreset: "420x520",
     },
   },
-  render_code: `
+  main_script: `
+<div id="page-wrap">
+  <div id="card">
+    <svg id="chart" role="img" aria-label="Mirrored horizontal bar chart"></svg>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+/*__SOURCE_DATA__*/
+
 function clampNumber(value, fallback, min, max) {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return fallback;
@@ -432,6 +433,7 @@ function renderChart(source_data) {
 }
 
 renderChart(source_data);
+<\/script>
   `.trim(),
 };
 

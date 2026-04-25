@@ -1,14 +1,15 @@
-function escapeScriptCloseTag(text) {
-  return text.replace(/<\/script>/gi, "<\\/script>");
-}
-
 function sourceDataToCode(sourceData) {
   return `const source_data = ${JSON.stringify(sourceData, null, 2)};`;
 }
 
+const SOURCE_DATA_PLACEHOLDER = "/*__SOURCE_DATA__*/";
+
 export function buildChartHtml(parts) {
   const sourceDataCode = sourceDataToCode(parts.source_data).replace(/</g, "\\u003c");
-  const renderCode = escapeScriptCloseTag(parts.render_code);
+  const mainScript = String(parts?.main_script || "").trim();
+  const injectedScript = mainScript.includes(SOURCE_DATA_PLACEHOLDER)
+    ? mainScript.replace(SOURCE_DATA_PLACEHOLDER, sourceDataCode)
+    : `${sourceDataCode}\n${mainScript}`;
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -17,12 +18,7 @@ export function buildChartHtml(parts) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   </head>
   <body>
-    ${parts.body}
-    ${parts.import_script}
-    <script>
-${sourceDataCode}
-${renderCode}
-    </script>
+    ${injectedScript}
   </body>
 </html>`;
 }
