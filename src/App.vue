@@ -13,6 +13,7 @@ import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
 import { parseRecommendationWithLLM } from "./llm/recommendationLLM.js";
 import { generateChartHtmlFromImage } from "./llm/chartCodeGeneratorLLM.js";
 import { htmlToChartParts } from "./utils/htmlToChartParts.js";
+import { buildRecommendationPanelPlan } from "./utils/recommendationPanelPlan.js";
 
 function createEmptyChartParts() {
   return {
@@ -97,6 +98,32 @@ function ensureIntentArray(rawIntents) {
   return [];
 }
 
+function removeRecommendationSections(panelSpecLike) {
+  const nextSpec = safeDeepClone(panelSpecLike, {});
+  const sections = Array.isArray(nextSpec.sections) ? nextSpec.sections : [];
+  nextSpec.sections = sections.filter(
+    (section) => !String(section?.sectionId || "").startsWith("recommendation_")
+  );
+
+  const expandedSections = Array.isArray(nextSpec.uiState?.expandedSections)
+    ? nextSpec.uiState.expandedSections
+    : [];
+  const nextExpandedSections = expandedSections.filter(
+    (sectionId) => !String(sectionId || "").startsWith("recommendation_")
+  );
+
+  nextSpec.uiState = {
+    expandedSections: nextExpandedSections,
+    highlightedSectionId: String(nextSpec.uiState?.highlightedSectionId || "").startsWith(
+      "recommendation_"
+    )
+      ? null
+      : nextSpec.uiState?.highlightedSectionId || null,
+  };
+
+  return nextSpec;
+}
+
 async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
   const intentResult = await parseIntentWithLLM({
     prompt,
@@ -151,7 +178,8 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
       imageBase64,
     });
     const intents = result.intents;
-    const countText = intents.length > 1 ? `${intents.length} intents` : "1 intent";
+    const countText =
+      intents.length === 0 ? "0 intent" : intents.length > 1 ? `${intents.length} intents` : "1 intent";
     pushToast(
       imageBase64
         ? `LLM parser succeeded with visual input (${countText}).`
@@ -165,7 +193,7 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
         : "Recommendation model succeeded.",
       "success"
     );
-    return intents;
+    return result;
   } catch (visionError) {
     if (imageBase64) {
       try {
@@ -183,7 +211,7 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
             : "Recommendation model succeeded.",
           "success"
         );
-        return intents;
+        return result;
       } catch (textError) {
         const visionMessage = visionError?.message ? ` vision=${visionError.message};` : "";
         const textMessage = textError?.message ? ` text=${textError.message};` : "";
@@ -221,26 +249,41 @@ async function handlePromptSubmit(payload) {
   busy.value = true;
 
   try {
-    const intents = await resolveIntent({ prompt, userImageBase64 });
-    if (!intents.length) {
-      pushToast("No intent recognized.", "warning");
-      return;
-    }
+    const llmResult = await resolveIntent({ prompt, userImageBase64 });
+    const intents = ensureIntentArray(llmResult?.intents);
 
     let nextParts = parts.value;
     let nextPanelSpec = panelSpec.value;
-    intents.forEach((intent) => {
-      const updatePlan = intentToUpdatePlan(intent, nextParts, nextPanelSpec);
-      const nextState = applyUpdatePlan(nextParts, nextPanelSpec, updatePlan);
-      nextParts = nextState.parts;
-      nextPanelSpec = nextState.panelSpec;
+    if (!intents.length) {
+      pushToast("No intent recognized.", "warning");
+    } else {
+      intents.forEach((intent) => {
+        const updatePlan = intentToUpdatePlan(intent, nextParts, nextPanelSpec);
+        const nextState = applyUpdatePlan(nextParts, nextPanelSpec, updatePlan);
+        nextParts = nextState.parts;
+        nextPanelSpec = nextState.panelSpec;
+      });
+    }
+
+    const recommendationPanelPlan = buildRecommendationPanelPlan({
+      recommendationJson: llmResult?.recommendationJson || {},
+      panelJson: llmResult?.panelJson || {},
     });
+    if ((recommendationPanelPlan?.panelUpdates || []).length) {
+      const cleanedPanelSpec = removeRecommendationSections(nextPanelSpec);
+      const recommendationState = applyUpdatePlan(nextParts, cleanedPanelSpec, recommendationPanelPlan);
+      nextParts = recommendationState.parts;
+      nextPanelSpec = recommendationState.panelSpec;
+      pushToast("Panel controls synchronized from recommendation output.", "info");
+    }
 
     parts.value = nextParts;
     panelSpec.value = nextPanelSpec;
 
-    const intentSummary = intents.map((intent) => `${intent.task} (${intent.action})`).join(" + ");
-    pushToast(`Intents: ${intentSummary}`, "success");
+    if (intents.length) {
+      const intentSummary = intents.map((intent) => `${intent.task} (${intent.action})`).join(" + ");
+      pushToast(`Intents: ${intentSummary}`, "success");
+    }
   } catch (error) {
     pushToast(error?.message || "Intent parsing failed.", "error", 4200);
   } finally {
