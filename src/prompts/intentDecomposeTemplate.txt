@@ -128,13 +128,13 @@ user input："我想要修改图表的大小和比例"
     "attributes":[
         {
             "name":"Svg Width",
-            "path":"CHART_CONFIG.width",
+            "path":"source_data.width",
             "type":"number",
             "value":"720"
         },
         {
             "name":"Svg Height",
-            "path":"CHART_CONFIG.height",
+            "path":"source_data.height",
             "type":"number",
             "value":"760"
         }
@@ -142,21 +142,21 @@ user input："我想要修改图表的大小和比例"
     "affected":[
         {
             "name":"Max Bar Width",
-            "path":"CHART_CONFIG.layout.maxBarWidth",
+            "path":"source_data.layout.maxBarWidth",
             "type":"number",
             "value":"190",
             "reason":"图表宽度调小时，bar超长则会超出图表外",
         },
         {
             "name":"Title position-y",
-            "path":"CHART_CONFIG.layout.titleY",
+            "path":"source_data.layout.titleY",
             "type":"number",
             "value":"600",
             "reason":"图表高度调小时，title可能则会超出图表外",
         },
         {
             "name":"Subtitle position-y",
-            "path":"CHART_CONFIG.layout.subtitleY",
+            "path":"source_data.layout.subtitleY",
             "type":"number",
             "value":"678",
             "reason":"图表高度调小时，Subtitle 可能则会超出图表外",

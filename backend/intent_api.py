@@ -51,7 +51,13 @@ def _pretty_json(value: Any) -> str:
 def _normalize_multiline_text(value: Any) -> str:
     """将文本中的转义换行符还原为真实换行，便于日志直观阅读。"""
     text = str(value or "")
-    return text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    return (
+        text.replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\t", "\t")
+    )
 
 
 def append_model_log_readable(entry: Dict[str, Any]) -> None:
@@ -73,7 +79,7 @@ def append_model_log_readable(entry: Dict[str, Any]) -> None:
             prompt_text = entry.get("prompt_text")
             if isinstance(prompt_text, str):
                 log_file.write("\n[prompt_text]\n")
-                log_file.write(prompt_text.rstrip() + "\n")
+                log_file.write(_normalize_multiline_text(prompt_text).rstrip() + "\n")
 
             content = entry.get("content")
             if isinstance(content, str):
@@ -163,25 +169,29 @@ def create_app() -> Flask:
         prompt = str(body.get("prompt", "")).strip()
         prompt_text = str(body.get("promptText", "")).strip() or prompt
         image_base64 = body.get("imageBase64")
+        provider = str(body.get("provider", "intent_decompose")).strip() or "intent_decompose"
         source_data = body.get("sourceData")
+        request_event = f"{provider}_request"
+        error_event = f"{provider}_error"
+        response_event = f"{provider}_response"
 
-        append_model_log(
-            {
-                "event": "intent_parse_request",
-                "request_id": request_id,
-                "timestamp": now_iso_utc(),
-                "prompt": prompt,
-                "prompt_text": prompt_text,
-                "source_data": source_data,
-                "has_image": bool(image_base64),
-                "image_base64_length": len(image_base64) if isinstance(image_base64, str) else 0,
-            }
-        )
+        request_log: Dict[str, Any] = {
+            "event": request_event,
+            "request_id": request_id,
+            "timestamp": now_iso_utc(),
+            "prompt": prompt,
+            "prompt_text": prompt_text,
+            "has_image": bool(image_base64),
+            "image_base64_length": len(image_base64) if isinstance(image_base64, str) else 0,
+        }
+        if provider != "recommendation" and source_data is not None:
+            request_log["source_data"] = source_data
+        append_model_log(request_log)
 
         if not prompt_text:
             append_model_log(
                 {
-                    "event": "intent_parse_error",
+                    "event": error_event,
                     "request_id": request_id,
                     "timestamp": now_iso_utc(),
                     "error": "prompt is required",
@@ -193,7 +203,7 @@ def create_app() -> Flask:
         if not config["api_key"]:
             append_model_log(
                 {
-                    "event": "intent_parse_error",
+                    "event": error_event,
                     "request_id": request_id,
                     "timestamp": now_iso_utc(),
                     "model": config["model"],
@@ -223,7 +233,7 @@ def create_app() -> Flask:
         except requests.RequestException as exc:
             append_model_log(
                 {
-                    "event": "intent_parse_error",
+                    "event": error_event,
                     "request_id": request_id,
                     "timestamp": now_iso_utc(),
                     "model": config["model"],
@@ -238,7 +248,7 @@ def create_app() -> Flask:
         except ValueError:
             append_model_log(
                 {
-                    "event": "intent_parse_error",
+                    "event": error_event,
                     "request_id": request_id,
                     "timestamp": now_iso_utc(),
                     "model": config["model"],
@@ -253,7 +263,7 @@ def create_app() -> Flask:
         if response.status_code >= 400:
             append_model_log(
                 {
-                    "event": "intent_parse_error",
+                    "event": error_event,
                     "request_id": request_id,
                     "timestamp": now_iso_utc(),
                     "model": config["model"],
@@ -293,7 +303,7 @@ def create_app() -> Flask:
 
         append_model_log(
             {
-                "event": "intent_parse_response",
+                "event": response_event,
                 "request_id": request_id,
                 "timestamp": now_iso_utc(),
                 "model": config["model"],

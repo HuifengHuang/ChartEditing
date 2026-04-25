@@ -10,6 +10,7 @@ import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
 import { applyUpdatePlan } from "./utils/applyUpdatePlan";
 import { runtimeModeConfig } from "./config/runtimeModeConfig.js";
 import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
+import { parseRecommendationWithLLM } from "./llm/recommendationLLM.js";
 import { generateChartHtmlFromImage } from "./llm/chartCodeGeneratorLLM.js";
 import { htmlToChartParts } from "./utils/htmlToChartParts.js";
 
@@ -96,6 +97,30 @@ function ensureIntentArray(rawIntents) {
   return [];
 }
 
+async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
+  const intentResult = await parseIntentWithLLM({
+    prompt,
+    sourceData,
+    imageBase64,
+  });
+  const intents = ensureIntentArray(intentResult?.intents);
+  const intentDecomposeJson =
+    intentResult?.decomposeJson && typeof intentResult.decomposeJson === "object"
+      ? intentResult.decomposeJson
+      : { intents };
+
+  const recommendationResult = await parseRecommendationWithLLM({
+    intentDecomposeJson,
+    imageBase64,
+  });
+
+  return {
+    intents,
+    intentDecomposeJson,
+    recommendationJson: recommendationResult?.recommendationJson || {},
+  };
+}
+
 async function captureCurrentChartImage() {
   await nextTick();
   const captureFn = chartPreviewRef.value?.captureChartImageBase64;
@@ -119,13 +144,12 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
   }
 
   try {
-    const intents = ensureIntentArray(
-      await parseIntentWithLLM({
-        prompt,
-        sourceData,
-        imageBase64,
-      })
-    );
+    const result = await runIntentAndRecommendation({
+      prompt,
+      sourceData,
+      imageBase64,
+    });
+    const intents = result.intents;
     const countText = intents.length > 1 ? `${intents.length} intents` : "1 intent";
     pushToast(
       imageBase64
@@ -133,18 +157,31 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
         : `LLM parser succeeded (text-only, ${countText}).`,
       "info"
     );
+    const recommendationRequired = result.recommendationJson?.recommendationRequired === true;
+    pushToast(
+      recommendationRequired
+        ? "Recommendation model succeeded (presets generated)."
+        : "Recommendation model succeeded.",
+      "success"
+    );
     return intents;
   } catch (visionError) {
     if (imageBase64) {
       try {
-        const intents = ensureIntentArray(
-          await parseIntentWithLLM({
-            prompt,
-            sourceData,
-            imageBase64: null,
-          })
+        const result = await runIntentAndRecommendation({
+          prompt,
+          sourceData,
+          imageBase64: null,
+        });
+        const intents = result.intents;
+        pushToast("Visual parse failed, text-only LLM succeeded (intent + recommendation).", "warning");
+        const recommendationRequired = result.recommendationJson?.recommendationRequired === true;
+        pushToast(
+          recommendationRequired
+            ? "Recommendation model succeeded (presets generated)."
+            : "Recommendation model succeeded.",
+          "success"
         );
-        pushToast("Visual parse failed, text-only LLM succeeded.", "warning");
         return intents;
       } catch (textError) {
         const visionMessage = visionError?.message ? ` vision=${visionError.message};` : "";

@@ -1,9 +1,7 @@
 import { llmConfig } from "../config/llmConfig.js";
-import { buildIntentPrompt } from "./intentPromptBuilder.js";
-import { parseIntentResponse } from "./intentResponseParser.js";
-import { validateIntentList } from "./intentSchemaValidator.js";
+import { buildRecommendationPrompt } from "./recommendationPromptBuilder.js";
+import { parseRecommendationResponse } from "./recommendationResponseParser.js";
 
-// 创建带超时能力的 AbortSignal，避免请求长时间挂起。
 function createAbortSignal(timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -13,9 +11,12 @@ function createAbortSignal(timeoutMs) {
   };
 }
 
-// 调用后端代理执行“意图分解”模型，返回原始分解 JSON 与标准 intents。
-async function parseIntentWithYizhanProxy({ prompt, sourceData, imageBase64 }) {
-  const promptText = buildIntentPrompt({ prompt, sourceData });
+// 调用推荐模型：输入 recommendationTemplate + 图片 + 意图分解 JSON。
+export async function parseRecommendationWithLLM({
+  intentDecomposeJson,
+  imageBase64 = null,
+}) {
+  const promptText = buildRecommendationPrompt({ intentDecomposeJson });
   const normalizedImageBase64 =
     typeof imageBase64 === "string" && imageBase64.trim() ? imageBase64.trim() : null;
   const timeout = createAbortSignal(llmConfig.timeoutMs);
@@ -27,11 +28,10 @@ async function parseIntentWithYizhanProxy({ prompt, sourceData, imageBase64 }) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        prompt,
+        prompt: "recommendation",
         promptText,
-        sourceData,
         imageBase64: normalizedImageBase64,
-        provider: "intent_decompose",
+        provider: "recommendation",
       }),
       signal: timeout.signal,
     });
@@ -44,30 +44,15 @@ async function parseIntentWithYizhanProxy({ prompt, sourceData, imageBase64 }) {
 
     const rawText = String(payload?.raw_text || payload?.text || "");
     if (!rawText.trim()) {
-      throw new Error("LLM response is empty.");
+      throw new Error("Recommendation LLM response is empty.");
     }
 
-    const decomposeJson = parseIntentResponse(rawText);
-    const intents = validateIntentList(decomposeJson);
+    const recommendationJson = parseRecommendationResponse(rawText);
     return {
       rawText,
-      decomposeJson,
-      intents,
+      recommendationJson,
     };
   } finally {
     timeout.clear();
   }
-}
-
-// 对外统一入口：返回 { decomposeJson, intents, rawText }。
-export async function parseIntentWithLLM({
-  prompt,
-  sourceData,
-  imageBase64 = null,
-}) {
-  return parseIntentWithYizhanProxy({
-    prompt,
-    sourceData,
-    imageBase64,
-  });
 }
