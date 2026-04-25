@@ -26,7 +26,7 @@
 - “attributes” 需要你进行判断，在 source_data 中有哪些属性是会直接影响到用户意图的，比如用户希望修改图表比例，那么图表的长宽就是直接影响到图表比例的。
 - “affected” 同样需要判断，在 source_data 中有哪些属性是会间接影响到用户意图的，比如用户希望修改图表比例，那么文字的位置，数据图的总长宽或者bar之间的间距都会间接影响到图表比例，如果affected最多不超过3个属性，如果有过多字段影响用户意图，那么选择影响最大的3个，并给出理由。
 - 对于一个影响到用户意图的属性，仅可能出现在 “attributes” 与 “affected” 其中一个位置，“attributes” 与 “affected” 中不能存在相同的属性。
-- Path 为属性在 source_data 数据中的路径，type为数据类型，比如number，text，color，size，Array（data特有），value 为当前值。
+- Path 为属性在 source_data 数据中的路径，type为数据类型，只存在以下5种类型[number，text，color，size，Array（data特有）]，value 为当前值。
 - “attributes” 中必须存在属性，但 “affected” 可以为空。
 - 所有属性中的value值直接使用source_data中的值，不要对值进行任何修改。
 

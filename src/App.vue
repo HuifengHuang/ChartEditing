@@ -98,30 +98,35 @@ function ensureIntentArray(rawIntents) {
   return [];
 }
 
-function removeRecommendationSections(panelSpecLike) {
+function removeSectionsByIdSet(panelSpecLike, sectionIdSet) {
   const nextSpec = safeDeepClone(panelSpecLike, {});
   const sections = Array.isArray(nextSpec.sections) ? nextSpec.sections : [];
   nextSpec.sections = sections.filter(
-    (section) => !String(section?.sectionId || "").startsWith("recommendation_")
+    (section) => !sectionIdSet.has(String(section?.sectionId || ""))
   );
 
   const expandedSections = Array.isArray(nextSpec.uiState?.expandedSections)
     ? nextSpec.uiState.expandedSections
     : [];
   const nextExpandedSections = expandedSections.filter(
-    (sectionId) => !String(sectionId || "").startsWith("recommendation_")
+    (sectionId) => !sectionIdSet.has(String(sectionId || ""))
   );
 
   nextSpec.uiState = {
     expandedSections: nextExpandedSections,
-    highlightedSectionId: String(nextSpec.uiState?.highlightedSectionId || "").startsWith(
-      "recommendation_"
-    )
+    highlightedSectionId: sectionIdSet.has(String(nextSpec.uiState?.highlightedSectionId || ""))
       ? null
       : nextSpec.uiState?.highlightedSectionId || null,
   };
 
   return nextSpec;
+}
+
+function removeRecommendationSections(panelSpecLike) {
+  return removeSectionsByIdSet(
+    panelSpecLike,
+    new Set(["recommendation_presets", "recommendation_sub_panel", "recommendation_affected_panel"])
+  );
 }
 
 async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
@@ -259,15 +264,27 @@ async function handlePromptSubmit(payload) {
     } else {
       intents.forEach((intent) => {
         const updatePlan = intentToUpdatePlan(intent, nextParts, nextPanelSpec);
-        const nextState = applyUpdatePlan(nextParts, nextPanelSpec, updatePlan);
+        // 只保留 source_data 更新；Panel 控件组统一由 recommendation 的 panel_json 生成，
+        // 避免注入 task registry 里的预设控件（如 Layout / Aspect Ratio）。
+        const sourceOnlyPlan = {
+          sourceDataUpdates: updatePlan?.sourceDataUpdates || [],
+          panelUpdates: [],
+        };
+        const nextState = applyUpdatePlan(nextParts, nextPanelSpec, sourceOnlyPlan);
         nextParts = nextState.parts;
         nextPanelSpec = nextState.panelSpec;
       });
     }
 
+    const hasLegendIntent = intents.some((intent) => intent?.task === "legend_edit");
+    if (!hasLegendIntent) {
+      nextPanelSpec = removeSectionsByIdSet(nextPanelSpec, new Set(["legend_primary", "legend_detail"]));
+    }
+
     const recommendationPanelPlan = buildRecommendationPanelPlan({
       recommendationJson: llmResult?.recommendationJson || {},
       panelJson: llmResult?.panelJson || {},
+      chartParts: nextParts,
     });
     if ((recommendationPanelPlan?.panelUpdates || []).length) {
       const cleanedPanelSpec = removeRecommendationSections(nextPanelSpec);
