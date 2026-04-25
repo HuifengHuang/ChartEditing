@@ -1,54 +1,74 @@
-// 安全序列化上下文对象，避免循环引用导致异常。
+import intentDecomposeTemplate from "../prompts/intentDecomposeTemplate.txt?raw";
+
+// 安全序列化对象，避免循环引用导致 JSON.stringify 报错。
 function safeJson(value) {
   try {
     return JSON.stringify(value, null, 2);
-  } catch (error) {
+  } catch {
     return "{}";
   }
 }
 
-// 构建给 LLM 的意图解析提示词，约束输出 JSON 结构。
-export function buildIntentPrompt({ prompt, context }) {
-  const singleIntentSchema = `{
-  "intentId": "string",
-  "intentType": "style | data",
-  "task": "aspect_ratio | color_theme | element_edit | legend_edit",
-  "target": ["layout | style | data | legend"],
-  "action": "update | add | remove | show_panel",
-  "parameters": {},
-  "needPanel": true,
-  "panelStrategy": "create | extend | reuse",
-  "detailRequested": false
-}`;
-  const schemaText = `{
-  "intents": [${singleIntentSchema}]
-}`;
+// 规范化模板文本；当模板为空时提供兜底模板。
+function normalizeTemplate(rawTemplate) {
+  const text = String(rawTemplate || "").trim();
+  if (!text) {
+    return [
+      "你是图表编辑系统的意图分解器。",
+      "请严格返回 JSON，不要返回 markdown，不要解释。",
+      "",
+      "输出结构：",
+      "{",
+      '  "intent": "string",',
+      '  "target": "string",',
+      '  "attributes": [],',
+      '  "affected": []',
+      "}",
+    ].join("\n");
+  }
+  return text;
+}
+
+// 追加可执行 intents 结构约束，保证后续更新流程可直接消费。
+function buildExecutionIntentSchemaHint() {
+  return [
+    "",
+    "你还需要额外返回 `intents` 数组（供系统执行），每个 intent 必须符合：",
+    "{",
+    '  "intentId": "string",',
+    '  "intentType": "style | data",',
+    '  "task": "aspect_ratio | color_theme | element_edit | legend_edit",',
+    '  "target": ["layout | style | data | legend"],',
+    '  "action": "update | add | remove | show_panel",',
+    '  "parameters": {},',
+    '  "needPanel": true,',
+    '  "panelStrategy": "create | extend | reuse",',
+    '  "detailRequested": false',
+    "}",
+    "最终输出必须是单个 JSON 对象，并且至少包含：intent、target、attributes、affected、intents。",
+  ].join("\n");
+}
+
+// 构建意图分解提示词，注入用户输入、source_data、上下文和图片说明。
+export function buildIntentPrompt({ prompt, sourceData, context }) {
+  const templateText = normalizeTemplate(intentDecomposeTemplate);
 
   return [
-    "You are an intent parser for a mirrored mood chart editor.",
-    "Return JSON ONLY. No markdown, no explanation.",
-    "Output must strictly follow this schema:",
-    schemaText,
+    templateText,
+    buildExecutionIntentSchemaHint(),
     "",
-    "Constraints:",
-    "- task must be one of: aspect_ratio, color_theme, element_edit, legend_edit",
-    "- action must be one of: update, add, remove, show_panel",
-    "- intentType must be style or data",
-    "- If month/value cannot be extracted, keep parameters minimal but still valid.",
-    "- intents must be an array with at least 1 intent object.",
-    "- If the user asks for multiple independent edits, output multiple intents in intents[] in user-mentioned order.",
-    "- Do not duplicate equivalent intents for the same task unless the prompt clearly asks separate operations.",
-    "- Panel-first policy: prefer exposing/reusing high-level controls first. Detail controls are only requested when needed.",
-    "- detailRequested=true means the user asks to show finer-grained controls. It is NOT an independent task.",
-    "- Do NOT output task=expand_controls / add_element / remove_element.",
-    "- For element add/remove/edit-table requests, use task=element_edit and choose action add/remove/show_panel.",
-    "- For color_theme, only set parameters.themeHint and parameters.applyPreset=true when the hint is explicit (warm/cool/soft).",
-    "- Use visual and context clues for relative descriptions (e.g. taller/wider, legend closer, yellow series). Map back to one of the 4 tasks.",
+    "【User input】",
+    String(prompt || ""),
     "",
-    "Editor context:",
+    "【source_data(JSON)】",
+    safeJson(sourceData || {}),
+    "",
+    "【Context(JSON)】",
     safeJson(context || {}),
     "",
-    "User prompt:",
-    String(prompt || ""),
+    "【Image】",
+    "图表图片已作为多模态输入单独附加，请结合图片 + source_data + 用户输入进行意图分解。",
+    "",
+    "请只返回合法 JSON。",
   ].join("\n");
 }

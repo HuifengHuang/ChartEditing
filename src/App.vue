@@ -6,7 +6,6 @@ import ControlPanel from "./components/ControlPanel.vue";
 import presetChart from "./data/preset_chart.json";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
-import { parseIntent as parseIntentByRule } from "./utils/parseIntent";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
 import { applyUpdatePlan } from "./utils/applyUpdatePlan";
 import { runtimeModeConfig } from "./config/runtimeModeConfig.js";
@@ -116,13 +115,8 @@ async function captureCurrentChartImage() {
 }
 
 async function resolveIntent({ prompt, userImageBase64 = null }) {
-  if (runtimeModeConfig.isDevelopment) {
-    const intents = ensureIntentArray(parseIntentByRule(prompt));
-    pushToast("Development mode: skip LLM parser and use local rule parser.", "info");
-    return intents;
-  }
-
   const context = buildIntentContext();
+  const sourceData = structuredClone(parts.value?.source_data || {});
   let imageBase64 =
     typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
 
@@ -139,6 +133,7 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
       await parseIntentWithLLM({
         prompt,
         context,
+        sourceData,
         imageBase64,
       })
     );
@@ -150,26 +145,27 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
       "info"
     );
     return intents;
-  } catch {
+  } catch (visionError) {
     if (imageBase64) {
       try {
         const intents = ensureIntentArray(
           await parseIntentWithLLM({
             prompt,
             context,
+            sourceData,
             imageBase64: null,
           })
         );
         pushToast("Visual parse failed, text-only LLM succeeded.", "warning");
         return intents;
-      } catch {
-        pushToast("LLM failed (vision + text-only), fallback to rule parser.", "warning");
-        return ensureIntentArray(parseIntentByRule(prompt));
+      } catch (textError) {
+        const visionMessage = visionError?.message ? ` vision=${visionError.message};` : "";
+        const textMessage = textError?.message ? ` text=${textError.message};` : "";
+        throw new Error(`LLM failed (vision + text-only).${visionMessage}${textMessage}`);
       }
     }
 
-    pushToast("LLM failed, fallback to rule parser.", "warning");
-    return ensureIntentArray(parseIntentByRule(prompt));
+    throw new Error(`LLM failed: ${visionError?.message || "unknown error"}`);
   }
 }
 
