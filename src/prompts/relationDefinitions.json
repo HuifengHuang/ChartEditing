@@ -1,0 +1,75 @@
+{
+  "relation_definitions": {
+    "visual_encoding": [
+      {
+        "name": "Shared Color Mapping",
+        "definition": "多个字段或组件共享同一个颜色映射语义，如 mark 颜色与 legend 色块。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "Shared Position Encoding",
+        "definition": "多个字段或组件共享同一个位置编码，如 x 轴标签、mark 位置、类别标签。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "Mark–Legend Encoding Consistency",
+        "definition": "legend 用于解释 mark 的视觉编码，因此两者应保持一致。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "Shared Emphasis Style",
+        "definition": "多个组件共同服务于同一个高亮目标，并共享强调样式。",
+        "typical_strength": "soft"
+      }
+    ],
+    "structural": [
+      {
+        "name": "Category Generates Marks",
+        "definition": "类别字段决定一组 mark 的生成，如每个类别对应一个柱子。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "Category Generates Axis / Labels / Legend",
+        "definition": "类别字段同时生成坐标轴标签、类别文本和图例项。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "One-to-One Mark–Label / Mark–Tooltip",
+        "definition": "某个 mark 与一个 label、tooltip 或细节对象一一对应。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "Derived / Aggregated Field Dependency",
+        "definition": "一个字段由另一个字段计算、聚合或排序得到，如 max、sum、percentage。",
+        "typical_strength": "hard"
+      },
+      {
+        "name": "Scale Domain Dependency",
+        "definition": "字段变化会引起 scale domain 或 axis range 的变化。",
+        "typical_strength": "hard"
+      }
+    ],
+    "expressive_consistency": [
+      {
+        "name": "Focus–Context Relation",
+        "definition": "突出一个对象时，其余对象作为背景上下文进行弱化。",
+        "typical_strength": "soft"
+      },
+      {
+        "name": "Focus–Explanation Relation",
+        "definition": "被强调对象常需要说明字段，如 label、annotation、icon 协同出现。",
+        "typical_strength": "soft"
+      },
+      {
+        "name": "Highlighted Mark–Legend / Label Coordination",
+        "definition": "被高亮对象对应的 legend 项或标签可同步高亮。",
+        "typical_strength": "soft"
+      },
+      {
+        "name": "Comparison / Benchmark Coordination",
+        "definition": "表达比较时，目标字段与基准字段应协同出现。",
+        "typical_strength": "soft"
+      }
+    ]
+  }
+}

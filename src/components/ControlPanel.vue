@@ -252,14 +252,21 @@ function isBlockHighlighted(block) {
   border-radius: 12px;
   padding: 14px;
   height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-header h2 {
   margin: 0;
   font-size: 18px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .fallback-warning {
@@ -274,6 +281,9 @@ function isBlockHighlighted(block) {
 
 .section-list {
   margin-top: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;

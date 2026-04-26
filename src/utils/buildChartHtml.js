@@ -36,9 +36,12 @@ function normalizeImportScript(importScriptText) {
   return urls.map((url) => `<script src="${url}"></script>`).join("\n  ");
 }
 
-// 归一化 render_script：去 script 包裹并移除重复的 source_data 定义。
+// 归一化 render_script：支持字符串或按行数组；去 script 包裹并移除重复的 source_data 定义。
 function normalizeRenderScript(renderScriptText) {
-  let script = stripCodeFence(renderScriptText);
+  const rawScript = Array.isArray(renderScriptText)
+    ? renderScriptText.map((line) => String(line ?? "")).join("\n")
+    : renderScriptText;
+  let script = stripCodeFence(rawScript);
   script = script.replace(/^\s*<script[^>]*>/i, "").replace(/<\/script>\s*$/i, "").trim();
 
   // 防止第二步提取仍带 source_data 定义导致重复声明报错。

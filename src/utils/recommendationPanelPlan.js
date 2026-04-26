@@ -283,7 +283,73 @@ function buildControlsByItem({ item, index, idPrefix, chartParts }) {
   return [control];
 }
 
-function buildPresetControl(recommendationJson, panelJson) {
+function buildSourceDataUpdatesFromItems(items, chartParts) {
+  const updates = [];
+  const seen = new Set();
+
+  items.forEach((item) => {
+    const path = safeString(item?.path);
+    if (!path || seen.has(path)) {
+      return;
+    }
+    seen.add(path);
+
+    const value = resolveItemValue(item, chartParts);
+    if (value === undefined) {
+      return;
+    }
+    const mapped = normalizeType(item?.type, value);
+    updates.push({
+      type: "set",
+      path,
+      value: normalizeValue(value, mapped.valueType),
+    });
+  });
+
+  return updates;
+}
+
+function collectOriginPatchPaths(presets, subPanelItems) {
+  const set = new Set();
+  presets.forEach((preset) => {
+    safeArray(preset?.values).forEach((item) => {
+      const path = safeString(item?.path);
+      if (path) {
+        set.add(path);
+      }
+    });
+  });
+  subPanelItems.forEach((item) => {
+    const path = safeString(item?.path);
+    if (path) {
+      set.add(path);
+    }
+  });
+  return Array.from(set);
+}
+
+function buildOriginPresetOption({ topPanel, presets, subPanelItems, chartParts }) {
+  const options = safeArray(topPanel?.options).map((item) => safeString(item)).filter(Boolean);
+  const hasOrigin = options.some((item) => item.toLowerCase() === "origin");
+  const originLabel = hasOrigin ? options.find((item) => item.toLowerCase() === "origin") : "origin";
+
+  const patch = {};
+  const paths = collectOriginPatchPaths(presets, subPanelItems);
+  paths.forEach((path) => {
+    const currentValue = getValueByPath(chartParts, path);
+    if (currentValue !== undefined) {
+      patch[path] = safeClone(currentValue);
+    }
+  });
+
+  return {
+    id: "origin",
+    label: originLabel || "origin",
+    patch,
+  };
+}
+
+function buildPresetControl(recommendationJson, panelJson, chartParts, subPanelItems) {
   const presets = safeArray(recommendationJson?.presets);
   if (!presets.length) {
     return null;
@@ -291,6 +357,7 @@ function buildPresetControl(recommendationJson, panelJson) {
 
   const topPanel = safeObject(panelJson?.["top-panel"]);
   const topTitle = safeString(topPanel.title) || "Recommendation Presets";
+  const recommendationRequired = recommendationJson?.recommendationRequired === true;
   const presetOptions = presets
     .map((preset, index) => {
       const values = safeArray(preset?.values);
@@ -313,6 +380,17 @@ function buildPresetControl(recommendationJson, panelJson) {
       };
     })
     .filter(Boolean);
+
+  if (recommendationRequired) {
+    presetOptions.unshift(
+      buildOriginPresetOption({
+        topPanel,
+        presets,
+        subPanelItems,
+        chartParts,
+      })
+    );
+  }
 
   if (!presetOptions.length) {
     return null;
@@ -374,12 +452,14 @@ function createSection(sectionId, title, priority = "primary") {
 export function buildRecommendationPanelPlan({ recommendationJson, panelJson, chartParts }) {
   const safeRecommendation = safeObject(recommendationJson);
   const safePanelJson = safeObject(panelJson);
+  const recommendationRequired = safeRecommendation?.recommendationRequired === true;
 
   const subPanelItems = resolveSubPanelItems(safeRecommendation, safePanelJson);
   const affectedItems = resolveAffectedItems(safeRecommendation, safePanelJson);
-  const presetControl = buildPresetControl(safeRecommendation, safePanelJson);
+  const presetControl = buildPresetControl(safeRecommendation, safePanelJson, chartParts, subPanelItems);
 
   const panelUpdates = [];
+  const sourceDataUpdates = recommendationRequired ? [] : buildSourceDataUpdatesFromItems(subPanelItems, chartParts);
 
   if (presetControl) {
     panelUpdates.push(createSection("recommendation_presets", "Recommendation Presets", "primary"));
@@ -426,7 +506,7 @@ export function buildRecommendationPanelPlan({ recommendationJson, panelJson, ch
   }
 
   return {
-    sourceDataUpdates: [],
+    sourceDataUpdates,
     panelUpdates,
   };
 }
