@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import ControlRenderer from "./ControlRenderer.vue";
 import { addItemToCollection, removeItemFromCollection } from "../utils/collectionUtils";
 import { setValueByPath } from "../utils/pathUtils";
@@ -23,6 +23,7 @@ const props = defineProps({
 const selectedGroupId = ref("");
 const collapsedGroupIds = ref(new Set());
 const expandedDetailByGroup = ref(new Map());
+const panelRootRef = ref(null);
 
 function normalizePanelSpec(value) {
   return value && typeof value === "object" ? value : { sections: [], uiState: {} };
@@ -308,10 +309,34 @@ function onRemoveItem(payload) {
 function hasValidationIssue(groupId) {
   return !getMeta(groupId).validation.isValid;
 }
+
+async function focusGroupById(groupId) {
+  const normalizedGroupId = String(groupId || "").trim();
+  if (!normalizedGroupId) {
+    return;
+  }
+  if (!displayGroups.value.some((group) => group.id === normalizedGroupId)) {
+    return;
+  }
+
+  selectedGroupId.value = normalizedGroupId;
+  const nextCollapsed = new Set(collapsedGroupIds.value);
+  nextCollapsed.delete(normalizedGroupId);
+  collapsedGroupIds.value = nextCollapsed;
+
+  await nextTick();
+  const cards = panelRootRef.value?.querySelectorAll(".group-card");
+  const target = Array.from(cards || []).find((item) => item?.dataset?.groupId === normalizedGroupId);
+  target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+defineExpose({
+  focusGroupById,
+});
 </script>
 
 <template>
-  <section class="control-panel panel">
+  <section ref="panelRootRef" class="control-panel panel">
     <header class="panel-header">
       <h2>{{ panelTitle }}</h2>
     </header>
@@ -322,6 +347,7 @@ function hasValidationIssue(groupId) {
         v-for="group in displayGroups"
         :key="group.id"
         class="group-card"
+        :data-group-id="group.id"
         :class="{ selected: isGroupSelected(group.id) }"
         @click="selectGroup(group.id)"
       >

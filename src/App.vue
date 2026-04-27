@@ -68,10 +68,12 @@ const parts = ref(
 const panelSpec = ref(createEmptyPanelSpec());
 const panelGroups = ref([]);
 const chartPreviewRef = ref(null);
+const controlPanelRef = ref(null);
 
 const busy = ref(false);
 const llmResponseTick = ref(0);
 const chartRenderedTick = ref(0);
+const latestIntentGroups = ref([]);
 const toasts = ref([]);
 const isPreviewVisible = ref(runtimeModeConfig.isDevelopment);
 const previewPlaceholderText = ref(runtimeModeConfig.isDevelopment ? "" : "No chart entered");
@@ -82,6 +84,17 @@ const htmlContent = computed(() => buildChartHtml(parts.value));
 
 function handleChartRendered() {
   chartRenderedTick.value += 1;
+}
+
+function handleFocusIntentGroup(payload) {
+  const groupId = String(payload?.groupId || "").trim();
+  if (!groupId) {
+    return;
+  }
+  const focusFn = controlPanelRef.value?.focusGroupById;
+  if (typeof focusFn === "function") {
+    focusFn(groupId);
+  }
 }
 
 function pushToast(message, type = "info", timeoutMs = 2800) {
@@ -319,6 +332,7 @@ async function handlePromptSubmit(payload) {
   }
 
   busy.value = true;
+  latestIntentGroups.value = [];
 
   try {
     const llmResult = await resolveIntent({ prompt, userImageBase64 });
@@ -390,12 +404,17 @@ async function handlePromptSubmit(payload) {
     parts.value = nextParts;
     panelSpec.value = nextPanelSpec;
     panelGroups.value = mergedPanelGroups;
+    latestIntentGroups.value = appendedPanelGroups.map((group) => ({
+      groupId: group.id,
+      label: group.label,
+    }));
 
     if (intents.length) {
       const intentSummary = intents.map((intent) => `${intent.task} (${intent.action})`).join(" + ");
       pushToast(`Intents: ${intentSummary}`, "success");
     }
   } catch (error) {
+    latestIntentGroups.value = [];
     pushToast(error?.message || "Intent parsing failed.", "error", 4200);
   } finally {
     llmResponseTick.value += 1;
@@ -422,6 +441,7 @@ async function handleImageUploaded(payload) {
     parts.value = createChartPartsFromPresetChart();
     panelSpec.value = createEmptyPanelSpec();
     panelGroups.value = [];
+    latestIntentGroups.value = [];
     isPreviewVisible.value = true;
     previewPlaceholderText.value = "";
     llmResponseTick.value += 1;
@@ -440,9 +460,11 @@ async function handleImageUploaded(payload) {
     parts.value = generatedParts;
     panelSpec.value = createEmptyPanelSpec();
     panelGroups.value = [];
+    latestIntentGroups.value = [];
     generated = true;
     pushToast("Chart template generated from uploaded image.", "success");
   } catch (error) {
+    latestIntentGroups.value = [];
     pushToast(error?.message || "Failed to generate chart from image.", "error", 4200);
   } finally {
     isPreviewVisible.value = generated;
@@ -477,8 +499,10 @@ async function handleImageUploaded(payload) {
           :llm-response-tick="llmResponseTick"
           :chart-rendered-tick="chartRenderedTick"
           :is-chart-visible="isPreviewVisible"
+          :latest-intent-groups="latestIntentGroups"
           @submit-prompt="handlePromptSubmit"
           @image-uploaded="handleImageUploaded"
+          @focus-intent-group="handleFocusIntentGroup"
         />
       </div>
 
@@ -493,7 +517,12 @@ async function handleImageUploaded(payload) {
       </div>
 
       <div class="right-column">
-        <ControlPanel :parts="parts" :panel-spec="panelSpec" :panel-groups="panelGroups" />
+        <ControlPanel
+          ref="controlPanelRef"
+          :parts="parts"
+          :panel-spec="panelSpec"
+          :panel-groups="panelGroups"
+        />
       </div>
     </section>
   </main>

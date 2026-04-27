@@ -20,9 +20,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  latestIntentGroups: {
+    type: Array,
+    default: () => [],
+  },
 });
 
-const emit = defineEmits(["submit-prompt", "image-uploaded"]);
+const emit = defineEmits(["submit-prompt", "image-uploaded", "focus-intent-group"]);
 
 const chatInput = ref("");
 const imageFileInputRef = ref(null);
@@ -40,11 +44,20 @@ let rebuildStatusMessageId = null;
 let processingStatusMessageId = null;
 
 function pushMessage(role, content, options = {}) {
+  const normalizedIntentGroups = Array.isArray(options.intentGroups)
+    ? options.intentGroups
+        .map((item) => ({
+          groupId: String(item?.groupId || ""),
+          label: String(item?.label || "").trim(),
+        }))
+        .filter((item) => item.groupId && item.label)
+    : [];
   const message = {
     id: `msg_${Date.now()}_${messageSeed.value++}`,
     role,
     content,
     loading: Boolean(options.loading),
+    intentGroups: normalizedIntentGroups,
   };
   messages.value.push(message);
   return message.id;
@@ -70,7 +83,9 @@ function maybeSendFinalReply() {
     return;
   }
 
-  pushMessage("assistant", "The code and UI panel have been updated.");
+  pushMessage("assistant", "The code and UI panel have been updated.", {
+    intentGroups: props.latestIntentGroups,
+  });
   waitingFinalReply.value = false;
 }
 
@@ -224,6 +239,14 @@ function onImageSelected(event) {
   reader.readAsDataURL(file);
 }
 
+function onIntentGroupClick(groupId) {
+  const normalizedGroupId = String(groupId || "").trim();
+  if (!normalizedGroupId) {
+    return;
+  }
+  emit("focus-intent-group", { groupId: normalizedGroupId });
+}
+
 watch(
   () => props.chartRenderedTick,
   (nextValue, prevValue) => {
@@ -320,6 +343,17 @@ onBeforeUnmount(() => {
                 <span v-if="message.loading" class="loading-dots" aria-hidden="true">
                   <span></span><span></span><span></span>
                 </span>
+                <div v-if="!message.loading && message.intentGroups?.length" class="intent-link-list">
+                  <button
+                    v-for="item in message.intentGroups"
+                    :key="`${message.id}_${item.groupId}`"
+                    type="button"
+                    class="intent-link-btn"
+                    @click="onIntentGroupClick(item.groupId)"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -516,6 +550,28 @@ onBeforeUnmount(() => {
   color: #0f172a;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.intent-link-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.intent-link-btn {
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.intent-link-btn:hover {
+  background: #dbeafe;
 }
 
 .loading-dots {
