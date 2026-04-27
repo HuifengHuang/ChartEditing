@@ -26,6 +26,11 @@ const emit = defineEmits(["apply-patch", "add-item", "remove-item", "toggle-deta
 
 const removeSelection = ref("");
 const presetSelection = ref("");
+const singleDraftValue = ref("");
+const singleDraftEditing = ref(false);
+const multiDraftValue = ref("");
+const multiDraftEditing = ref(false);
+const tableCellDraftMap = ref({});
 
 // 根据 visibilityCondition 动态决定控件是否显示。
 const isVisible = computed(() => {
@@ -115,6 +120,30 @@ const currentMultiValue = computed(() => {
   return value === undefined ? control.defaultValue : value;
 });
 
+// 单值输入的草稿同步：只有不在编辑时才用外部值覆盖草稿。
+watch(
+  currentSingleValue,
+  (value) => {
+    if (singleDraftEditing.value) {
+      return;
+    }
+    singleDraftValue.value = value ?? "";
+  },
+  { immediate: true }
+);
+
+// 多值输入的草稿同步：只有不在编辑时才用外部值覆盖草稿。
+watch(
+  currentMultiValue,
+  (value) => {
+    if (multiDraftEditing.value) {
+      return;
+    }
+    multiDraftValue.value = value ?? "";
+  },
+  { immediate: true }
+);
+
 // 预设控件可选项。
 const presetOptions = computed(() => props.control.presetOptions || []);
 
@@ -193,8 +222,27 @@ function emitPatch(patch) {
 }
 
 // 单值输入事件处理。
-function onSingleInput(event) {
-  emitPatch(buildPatchForSingle(event.target.value));
+function onSingleDraftInput(event) {
+  singleDraftEditing.value = true;
+  singleDraftValue.value = event.target.value;
+}
+
+// 单值输入框在失焦时才提交修改。
+function commitSingleDraft() {
+  if (!singleDraftEditing.value) {
+    return;
+  }
+  emitPatch(buildPatchForSingle(singleDraftValue.value));
+  singleDraftEditing.value = false;
+}
+
+function onSingleDraftBlur() {
+  commitSingleDraft();
+}
+
+function onSingleDraftEnter(event) {
+  event.preventDefault();
+  event.target.blur();
 }
 
 // 开关输入事件处理。
@@ -205,7 +253,34 @@ function onToggleInput(event) {
 }
 
 // 多值输入事件处理。
-function onMultiInput(event) {
+function onSingleImmediateInput(event) {
+  emitPatch(buildPatchForSingle(event.target.value));
+}
+
+// 多值输入框在失焦时才提交修改。
+function onMultiDraftInput(event) {
+  multiDraftEditing.value = true;
+  multiDraftValue.value = event.target.value;
+}
+
+function commitMultiDraft() {
+  if (!multiDraftEditing.value) {
+    return;
+  }
+  emitPatch(buildPatchForMulti(multiDraftValue.value));
+  multiDraftEditing.value = false;
+}
+
+function onMultiDraftBlur() {
+  commitMultiDraft();
+}
+
+function onMultiDraftEnter(event) {
+  event.preventDefault();
+  event.target.blur();
+}
+
+function onMultiImmediateInput(event) {
   emitPatch(buildPatchForMulti(event.target.value));
 }
 
@@ -397,6 +472,54 @@ function onTableCellInput(rowIndex, column, rawValue) {
   });
 }
 
+// 表格单元格编辑草稿：失焦时才提交到 parts。
+function getTableCellDraftKey(rowIndex, columnKey) {
+  return `${rowIndex}::${columnKey}`;
+}
+
+function getTableCellDisplayValue(rowIndex, column, row) {
+  const key = getTableCellDraftKey(rowIndex, column.key);
+  if (Object.prototype.hasOwnProperty.call(tableCellDraftMap.value, key)) {
+    return tableCellDraftMap.value[key];
+  }
+  return row?.[column.key] ?? "";
+}
+
+function onTableCellDraftInput(rowIndex, column, rawValue) {
+  const key = getTableCellDraftKey(rowIndex, column.key);
+  tableCellDraftMap.value = {
+    ...tableCellDraftMap.value,
+    [key]: rawValue,
+  };
+}
+
+function clearTableCellDraft(rowIndex, column) {
+  const key = getTableCellDraftKey(rowIndex, column.key);
+  if (!Object.prototype.hasOwnProperty.call(tableCellDraftMap.value, key)) {
+    return;
+  }
+  const next = { ...tableCellDraftMap.value };
+  delete next[key];
+  tableCellDraftMap.value = next;
+}
+
+function commitTableCellDraft(rowIndex, column, fallbackRawValue = "") {
+  const key = getTableCellDraftKey(rowIndex, column.key);
+  const hasDraft = Object.prototype.hasOwnProperty.call(tableCellDraftMap.value, key);
+  const rawValue = hasDraft ? tableCellDraftMap.value[key] : fallbackRawValue;
+  onTableCellInput(rowIndex, column, rawValue);
+  clearTableCellDraft(rowIndex, column);
+}
+
+function onTableCellBlur(rowIndex, column, event) {
+  commitTableCellDraft(rowIndex, column, event?.target?.value ?? "");
+}
+
+function onTableCellEnter(event) {
+  event.preventDefault();
+  event.target.blur();
+}
+
 // 表格“加行”操作。
 function onTableAddRow() {
   emit("add-item", {
@@ -454,8 +577,10 @@ function isRowActionEnabled(action) {
         :min="getRangeAttr('min')"
         :max="getRangeAttr('max')"
         :step="getRangeAttr('step')"
-        :value="currentSingleValue"
-        @input="onSingleInput"
+        :value="singleDraftValue"
+        @input="onSingleDraftInput"
+        @blur="onSingleDraftBlur"
+        @keydown.enter="onSingleDraftEnter"
       />
 
       <div
@@ -468,7 +593,7 @@ function isRowActionEnabled(action) {
           :max="getRangeAttr('max')"
           :step="getRangeAttr('step')"
           :value="currentSingleValue"
-          @input="onSingleInput"
+          @input="onSingleImmediateInput"
         />
         <span>{{ Number(currentSingleValue).toFixed(2) }}</span>
       </div>
@@ -476,21 +601,23 @@ function isRowActionEnabled(action) {
       <input
         v-else-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'text'"
         type="text"
-        :value="currentSingleValue"
-        @input="onSingleInput"
+        :value="singleDraftValue"
+        @input="onSingleDraftInput"
+        @blur="onSingleDraftBlur"
+        @keydown.enter="onSingleDraftEnter"
       />
 
       <input
         v-else-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'color'"
         type="color"
         :value="currentSingleValue"
-        @input="onSingleInput"
+        @input="onSingleImmediateInput"
       />
 
       <select
         v-else-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'select'"
         :value="currentSingleValue"
-        @change="onSingleInput"
+        @change="onSingleImmediateInput"
       >
         <option v-for="option in control.options" :key="String(option.value)" :value="option.value">
           {{ option.label }}
@@ -511,8 +638,10 @@ function isRowActionEnabled(action) {
         :min="getRangeAttr('min')"
         :max="getRangeAttr('max')"
         :step="getRangeAttr('step')"
-        :value="currentMultiValue"
-        @input="onMultiInput"
+        :value="multiDraftValue"
+        @input="onMultiDraftInput"
+        @blur="onMultiDraftBlur"
+        @keydown.enter="onMultiDraftEnter"
       />
 
       <div
@@ -525,7 +654,7 @@ function isRowActionEnabled(action) {
           :max="getRangeAttr('max')"
           :step="getRangeAttr('step')"
           :value="currentMultiValue"
-          @input="onMultiInput"
+          @input="onMultiImmediateInput"
         />
         <span>{{ Number(currentMultiValue).toFixed(2) }}</span>
       </div>
@@ -533,7 +662,7 @@ function isRowActionEnabled(action) {
       <select
         v-else-if="control.operationType === 'update' && control.bindingMode === 'multi' && control.controlType === 'select'"
         :value="currentMultiValue"
-        @change="onMultiInput"
+        @change="onMultiImmediateInput"
       >
         <option v-for="option in control.options" :key="String(option.value)" :value="option.value">
           {{ option.label }}
@@ -589,8 +718,10 @@ function isRowActionEnabled(action) {
                 <input
                   v-if="column.editable !== false"
                   :type="column.valueType === 'number' ? 'number' : column.valueType === 'color' ? 'color' : 'text'"
-                  :value="row?.[column.key]"
-                  @input="onTableCellInput(rowIndex, column, $event.target.value)"
+                  :value="getTableCellDisplayValue(rowIndex, column, row)"
+                  @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                  @blur="onTableCellBlur(rowIndex, column, $event)"
+                  @keydown.enter="onTableCellEnter"
                 />
                 <span v-else>{{ row?.[column.key] }}</span>
               </td>
@@ -625,8 +756,10 @@ function isRowActionEnabled(action) {
                 <input
                   v-if="column.editable !== false"
                   :type="column.valueType === 'number' ? 'number' : column.valueType === 'color' ? 'color' : 'text'"
-                  :value="row?.[column.key]"
-                  @input="onTableCellInput(rowIndex, column, $event.target.value)"
+                  :value="getTableCellDisplayValue(rowIndex, column, row)"
+                  @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                  @blur="onTableCellBlur(rowIndex, column, $event)"
+                  @keydown.enter="onTableCellEnter"
                 />
                 <span v-else>{{ row?.[column.key] }}</span>
               </td>

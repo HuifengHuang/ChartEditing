@@ -468,7 +468,6 @@ export function buildRecommendationPanelPlan({ recommendationJson, panelJson, ch
       sectionId: "recommendation_presets",
       payload: presetControl,
     });
-    panelUpdates.push({ type: "highlight-section", sectionId: "recommendation_presets" });
   }
 
   if (subPanelItems.length) {

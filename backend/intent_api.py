@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -33,7 +33,7 @@ FIXED_MODEL = "gpt-5.3-codex"
 
 def now_iso_utc() -> str:
     """返回 UTC ISO 时间字符串，统一日志时间格式。"""
-    return datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def append_model_log(entry: Dict[str, Any]) -> None:
