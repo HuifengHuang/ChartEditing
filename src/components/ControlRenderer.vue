@@ -167,12 +167,53 @@ function getRangeAttr(name) {
   return props.control?.range?.[name];
 }
 
+function toNumberOrFallback(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function countDecimals(value) {
+  const text = String(value ?? "");
+  if (!text.includes(".")) {
+    return 0;
+  }
+  return text.split(".")[1].length;
+}
+
+function adjustNumericValue(rawValue, direction, rangeLike = {}) {
+  const stepValue = toNumberOrFallback(rangeLike?.step, 1);
+  const step = stepValue === 0 ? 1 : Math.abs(stepValue);
+  const minRaw = rangeLike?.min;
+  const maxRaw = rangeLike?.max;
+  const min = Number.isFinite(Number(minRaw)) ? Number(minRaw) : null;
+  const max = Number.isFinite(Number(maxRaw)) ? Number(maxRaw) : null;
+
+  const current = toNumberOrFallback(rawValue, 0);
+  let next = current + direction * step;
+
+  if (min !== null) {
+    next = Math.max(min, next);
+  }
+  if (max !== null) {
+    next = Math.min(max, next);
+  }
+
+  const decimals = Math.max(countDecimals(step), countDecimals(current));
+  return Number(next.toFixed(Math.min(decimals, 8)));
+}
+
 // 将输入值按控件类型归一化为 number/boolean/string。
 function normalizeInputValue(value, valueType, controlType) {
   if (controlType === "toggle") {
     return Boolean(value);
   }
-  if (valueType === "number" || controlType === "number" || controlType === "slider") {
+  if (
+    valueType === "number" ||
+    valueType === "size" ||
+    controlType === "number" ||
+    controlType === "size" ||
+    controlType === "slider"
+  ) {
     const parsed = Number(value);
     return Number.isNaN(parsed) ? 0 : parsed;
   }
@@ -245,6 +286,18 @@ function onSingleDraftEnter(event) {
   event.target.blur();
 }
 
+function onSingleStep(direction) {
+  const baseValue = singleDraftEditing.value ? singleDraftValue.value : currentSingleValue.value;
+  const nextValue = adjustNumericValue(baseValue, direction, {
+    min: getRangeAttr("min"),
+    max: getRangeAttr("max"),
+    step: getRangeAttr("step"),
+  });
+  singleDraftValue.value = nextValue;
+  singleDraftEditing.value = false;
+  emitPatch(buildPatchForSingle(nextValue));
+}
+
 // 开关输入事件处理。
 function onToggleInput(event) {
   emitPatch({
@@ -282,6 +335,18 @@ function onMultiDraftEnter(event) {
 
 function onMultiImmediateInput(event) {
   emitPatch(buildPatchForMulti(event.target.value));
+}
+
+function onMultiStep(direction) {
+  const baseValue = multiDraftEditing.value ? multiDraftValue.value : currentMultiValue.value;
+  const nextValue = adjustNumericValue(baseValue, direction, {
+    min: getRangeAttr("min"),
+    max: getRangeAttr("max"),
+    step: getRangeAttr("step"),
+  });
+  multiDraftValue.value = nextValue;
+  multiDraftEditing.value = false;
+  emitPatch(buildPatchForMulti(nextValue));
 }
 
 // 预设输入事件处理。
@@ -520,6 +585,17 @@ function onTableCellEnter(event) {
   event.target.blur();
 }
 
+function onTableCellStep(rowIndex, column, row, direction) {
+  const baseValue = getTableCellDisplayValue(rowIndex, column, row);
+  const nextValue = adjustNumericValue(baseValue, direction, {
+    min: column?.min,
+    max: column?.max,
+    step: column?.step ?? 1,
+  });
+  onTableCellInput(rowIndex, column, nextValue);
+  clearTableCellDraft(rowIndex, column);
+}
+
 // 表格“加行”操作。
 function onTableAddRow() {
   emit("add-item", {
@@ -544,6 +620,16 @@ function onTableRemoveRow(rowIndex, rowValue) {
 // 判断行级动作是否开启。
 function isRowActionEnabled(action) {
   return Array.isArray(props.control.rowActions) && props.control.rowActions.includes(action);
+}
+
+function isNumberLikeControl(control) {
+  const controlType = String(control?.controlType || "").toLowerCase();
+  return controlType === "number" || controlType === "size";
+}
+
+function isNumberLikeColumn(column) {
+  const valueType = String(column?.valueType || "").toLowerCase();
+  return valueType === "number" || valueType === "size";
 }
 </script>
 
@@ -571,17 +657,26 @@ function isRowActionEnabled(action) {
         </button>
       </div>
 
-      <input
-        v-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'number'"
-        type="number"
-        :min="getRangeAttr('min')"
-        :max="getRangeAttr('max')"
-        :step="getRangeAttr('step')"
-        :value="singleDraftValue"
-        @input="onSingleDraftInput"
-        @blur="onSingleDraftBlur"
-        @keydown.enter="onSingleDraftEnter"
-      />
+      <div
+        v-if="control.operationType === 'update' && control.bindingMode === 'single' && isNumberLikeControl(control)"
+        class="number-input-wrap"
+      >
+        <input
+          class="no-spinner"
+          type="number"
+          :min="getRangeAttr('min')"
+          :max="getRangeAttr('max')"
+          :step="getRangeAttr('step')"
+          :value="singleDraftValue"
+          @input="onSingleDraftInput"
+          @blur="onSingleDraftBlur"
+          @keydown.enter="onSingleDraftEnter"
+        />
+        <div class="number-stepper">
+          <button type="button" class="step-btn step-dec" @click="onSingleStep(-1)">-</button>
+          <button type="button" class="step-btn step-inc" @click="onSingleStep(1)">+</button>
+        </div>
+      </div>
 
       <div
         v-else-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'slider'"
@@ -632,17 +727,26 @@ function isRowActionEnabled(action) {
         <span>{{ Boolean(currentSingleValue) ? "On" : "Off" }}</span>
       </label>
 
-      <input
-        v-else-if="control.operationType === 'update' && control.bindingMode === 'multi' && control.controlType === 'number'"
-        type="number"
-        :min="getRangeAttr('min')"
-        :max="getRangeAttr('max')"
-        :step="getRangeAttr('step')"
-        :value="multiDraftValue"
-        @input="onMultiDraftInput"
-        @blur="onMultiDraftBlur"
-        @keydown.enter="onMultiDraftEnter"
-      />
+      <div
+        v-else-if="control.operationType === 'update' && control.bindingMode === 'multi' && isNumberLikeControl(control)"
+        class="number-input-wrap"
+      >
+        <input
+          class="no-spinner"
+          type="number"
+          :min="getRangeAttr('min')"
+          :max="getRangeAttr('max')"
+          :step="getRangeAttr('step')"
+          :value="multiDraftValue"
+          @input="onMultiDraftInput"
+          @blur="onMultiDraftBlur"
+          @keydown.enter="onMultiDraftEnter"
+        />
+        <div class="number-stepper">
+          <button type="button" class="step-btn step-dec" @click="onMultiStep(-1)">-</button>
+          <button type="button" class="step-btn step-inc" @click="onMultiStep(1)">+</button>
+        </div>
+      </div>
 
       <div
         v-else-if="control.operationType === 'update' && control.bindingMode === 'multi' && control.controlType === 'slider'"
@@ -715,9 +819,23 @@ function isRowActionEnabled(action) {
           <tbody>
             <tr v-for="(row, rowIndex) in collection" :key="`${row?.[control.rowKey] ?? rowIndex}`">
               <td v-for="column in tableColumns" :key="column.key">
+                <div v-if="column.editable !== false && isNumberLikeColumn(column)" class="number-input-wrap table-number-wrap">
+                  <input
+                    class="no-spinner"
+                    type="number"
+                    :value="getTableCellDisplayValue(rowIndex, column, row)"
+                    @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                    @blur="onTableCellBlur(rowIndex, column, $event)"
+                    @keydown.enter="onTableCellEnter"
+                  />
+                  <div class="number-stepper table-number-stepper">
+                    <button type="button" class="step-btn step-dec" @click="onTableCellStep(rowIndex, column, row, -1)">-</button>
+                    <button type="button" class="step-btn step-inc" @click="onTableCellStep(rowIndex, column, row, 1)">+</button>
+                  </div>
+                </div>
                 <input
-                  v-if="column.editable !== false"
-                  :type="column.valueType === 'number' ? 'number' : column.valueType === 'color' ? 'color' : 'text'"
+                  v-else-if="column.editable !== false"
+                  :type="column.valueType === 'color' ? 'color' : 'text'"
                   :value="getTableCellDisplayValue(rowIndex, column, row)"
                   @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
                   @blur="onTableCellBlur(rowIndex, column, $event)"
@@ -753,9 +871,23 @@ function isRowActionEnabled(action) {
             <tr v-for="column in tableColumns" :key="column.key">
               <th>{{ column.label || column.key }}</th>
               <td v-for="(row, rowIndex) in collection" :key="`${column.key}-${rowIndex}`">
+                <div v-if="column.editable !== false && isNumberLikeColumn(column)" class="number-input-wrap table-number-wrap">
+                  <input
+                    class="no-spinner"
+                    type="number"
+                    :value="getTableCellDisplayValue(rowIndex, column, row)"
+                    @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                    @blur="onTableCellBlur(rowIndex, column, $event)"
+                    @keydown.enter="onTableCellEnter"
+                  />
+                  <div class="number-stepper table-number-stepper">
+                    <button type="button" class="step-btn step-dec" @click="onTableCellStep(rowIndex, column, row, -1)">-</button>
+                    <button type="button" class="step-btn step-inc" @click="onTableCellStep(rowIndex, column, row, 1)">+</button>
+                  </div>
+                </div>
                 <input
-                  v-if="column.editable !== false"
-                  :type="column.valueType === 'number' ? 'number' : column.valueType === 'color' ? 'color' : 'text'"
+                  v-else-if="column.editable !== false"
+                  :type="column.valueType === 'color' ? 'color' : 'text'"
                   :value="getTableCellDisplayValue(rowIndex, column, row)"
                   @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
                   @blur="onTableCellBlur(rowIndex, column, $event)"
@@ -848,6 +980,59 @@ select {
   background: #ffffff;
 }
 
+.number-input-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.number-input-wrap input {
+  flex: 1;
+  min-width: 0;
+}
+
+.number-stepper {
+  width: 56px;
+  display: flex;
+  gap: 4px;
+}
+
+.step-btn {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.step-btn:active {
+  transform: translateY(1px);
+}
+
+.step-dec {
+  color: #991b1b;
+}
+
+.step-inc {
+  color: #166534;
+}
+
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .toggle-wrap {
   display: inline-flex;
   align-items: center;
@@ -906,6 +1091,14 @@ td {
 td input {
   font-size: 12px;
   padding: 6px;
+}
+
+.table-number-wrap {
+  gap: 4px;
+}
+
+.table-number-stepper {
+  width: 44px;
 }
 
 .unsupported {

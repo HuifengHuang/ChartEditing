@@ -39,7 +39,7 @@ function createChartPartsFromPresetChart() {
 
 function createEmptyPanelSpec() {
   const base = structuredClone(samplePanelSpecMirroredMood);
-  base.title = samplePanelSpecMirroredMood?.title || "Visual panels";
+  base.title = samplePanelSpecMirroredMood?.title || "Visual Panels";
   base.sections = [];
   base.uiState = {
     expandedSections: [],
@@ -71,6 +71,7 @@ const chartPreviewRef = ref(null);
 
 const busy = ref(false);
 const llmResponseTick = ref(0);
+const chartRenderedTick = ref(0);
 const toasts = ref([]);
 const isPreviewVisible = ref(runtimeModeConfig.isDevelopment);
 const previewPlaceholderText = ref(runtimeModeConfig.isDevelopment ? "" : "No chart entered");
@@ -78,6 +79,10 @@ let toastSeed = 0;
 let panelGroupSeed = 0;
 
 const htmlContent = computed(() => buildChartHtml(parts.value));
+
+function handleChartRendered() {
+  chartRenderedTick.value += 1;
+}
 
 function pushToast(message, type = "info", timeoutMs = 2800) {
   const text = String(message || "").trim();
@@ -470,6 +475,8 @@ async function handleImageUploaded(payload) {
         <UserInput
           :busy="busy"
           :llm-response-tick="llmResponseTick"
+          :chart-rendered-tick="chartRenderedTick"
+          :is-chart-visible="isPreviewVisible"
           @submit-prompt="handlePromptSubmit"
           @image-uploaded="handleImageUploaded"
         />
@@ -481,6 +488,7 @@ async function handleImageUploaded(payload) {
           :html-content="htmlContent"
           :is-chart-visible="isPreviewVisible"
           :placeholder-text="previewPlaceholderText"
+          @chart-rendered="handleChartRendered"
         />
       </div>
 

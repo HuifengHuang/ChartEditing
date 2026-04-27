@@ -32,7 +32,12 @@ function normalizeType(rawType, rawValue) {
   if (type.includes("color")) {
     return { controlType: "color", valueType: "color" };
   }
-  if (type.includes("number") || type.includes("int") || type.includes("float")) {
+  if (
+    type.includes("number") ||
+    type.includes("int") ||
+    type.includes("float") ||
+    type.includes("size")
+  ) {
     return { controlType: "number", valueType: "number" };
   }
   if (type.includes("bool")) {
@@ -57,7 +62,7 @@ function normalizeType(rawType, rawValue) {
 
 function normalizeValue(value, valueType) {
   if (valueType === "number") {
-    const n = Number(value);
+    const n = typeof value === "string" ? parseFloat(value) : Number(value);
     return Number.isFinite(n) ? n : 0;
   }
   if (valueType === "color") {

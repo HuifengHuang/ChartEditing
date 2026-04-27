@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from "vue";
 
+const emit = defineEmits(["chart-rendered"]);
+
 const props = defineProps({
   htmlContent: {
     type: String,
@@ -17,6 +19,10 @@ const props = defineProps({
 });
 
 const iframeRef = ref(null);
+
+function onFrameLoad() {
+  emit("chart-rendered");
+}
 
 // 导出当前预览中的完整 HTML 文件，便于离线查看与复现。
 function exportChartHtml() {
@@ -139,6 +145,7 @@ defineExpose({
         Export HTML
       </button>
     </header>
+    <div class="title-divider" aria-hidden="true"></div>
     <div v-if="!isChartVisible" class="preview-rebuild-placeholder">
       {{ placeholderText }}
     </div>
@@ -148,6 +155,7 @@ defineExpose({
       :srcdoc="htmlContent"
       sandbox="allow-scripts allow-same-origin"
       title="chart-preview"
+      @load="onFrameLoad"
     ></iframe>
   </section>
 </template>
@@ -175,6 +183,14 @@ defineExpose({
   gap: 10px;
 }
 
+.title-divider {
+  margin-top: 8px;
+  width: 100%;
+  height: 1px;
+  border-radius: 999px;
+  background: #d8e0ea;
+}
+
 .export-btn {
   border: 1px solid #cbd5e1;
   background: #ffffff;
@@ -190,7 +206,7 @@ defineExpose({
 }
 
 iframe {
-  margin-top: 12px;
+  margin-top: 10px;
   width: 100%;
   flex: 1;
   min-height: 0;
@@ -200,7 +216,7 @@ iframe {
 }
 
 .preview-rebuild-placeholder {
-  margin-top: 12px;
+  margin-top: 10px;
   width: 100%;
   flex: 1;
   min-height: 0;

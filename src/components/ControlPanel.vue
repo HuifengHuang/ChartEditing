@@ -128,7 +128,7 @@ const panelTitle = computed(() => {
     return fromProps;
   }
   const first = displayGroups.value[0];
-  return String(first?.panelSpec?.title || "Visual panels").trim() || "Visual panels";
+  return String(first?.panelSpec?.title || "Visual Panels").trim() || "Visual Panels";
 });
 
 const groupMetaMap = computed(() => {
@@ -315,6 +315,7 @@ function hasValidationIssue(groupId) {
     <header class="panel-header">
       <h2>{{ panelTitle }}</h2>
     </header>
+    <div class="title-divider" aria-hidden="true"></div>
 
     <div class="group-list">
       <section
@@ -412,8 +413,16 @@ function hasValidationIssue(groupId) {
   font-size: 18px;
 }
 
+.title-divider {
+  margin-top: 8px;
+  width: 100%;
+  height: 1px;
+  border-radius: 999px;
+  background: #d8e0ea;
+}
+
 .group-list {
-  margin-top: 12px;
+  margin-top: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
