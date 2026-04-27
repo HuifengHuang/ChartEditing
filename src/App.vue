@@ -39,6 +39,7 @@ function createChartPartsFromPresetChart() {
 
 function createEmptyPanelSpec() {
   const base = structuredClone(samplePanelSpecMirroredMood);
+  base.title = samplePanelSpecMirroredMood?.title || "Visual panels";
   base.sections = [];
   base.uiState = {
     expandedSections: [],
@@ -65,6 +66,7 @@ const parts = ref(
     : createEmptyChartParts()
 );
 const panelSpec = ref(createEmptyPanelSpec());
+const panelGroups = ref([]);
 const chartPreviewRef = ref(null);
 
 const busy = ref(false);
@@ -73,6 +75,7 @@ const toasts = ref([]);
 const isPreviewVisible = ref(runtimeModeConfig.isDevelopment);
 const previewPlaceholderText = ref(runtimeModeConfig.isDevelopment ? "" : "No chart entered");
 let toastSeed = 0;
+let panelGroupSeed = 0;
 
 const htmlContent = computed(() => buildChartHtml(parts.value));
 
@@ -98,35 +101,76 @@ function ensureIntentArray(rawIntents) {
   return [];
 }
 
-function removeSectionsByIdSet(panelSpecLike, sectionIdSet) {
-  const nextSpec = safeDeepClone(panelSpecLike, {});
-  const sections = Array.isArray(nextSpec.sections) ? nextSpec.sections : [];
-  nextSpec.sections = sections.filter(
-    (section) => !sectionIdSet.has(String(section?.sectionId || ""))
-  );
-
-  const expandedSections = Array.isArray(nextSpec.uiState?.expandedSections)
-    ? nextSpec.uiState.expandedSections
-    : [];
-  const nextExpandedSections = expandedSections.filter(
-    (sectionId) => !sectionIdSet.has(String(sectionId || ""))
-  );
-
-  nextSpec.uiState = {
-    expandedSections: nextExpandedSections,
-    highlightedSectionId: sectionIdSet.has(String(nextSpec.uiState?.highlightedSectionId || ""))
-      ? null
-      : nextSpec.uiState?.highlightedSectionId || null,
+function buildFallbackDecomposeItemFromIntent(intent, index) {
+  const parameters = intent?.parameters && typeof intent.parameters === "object" ? intent.parameters : {};
+  const intentText =
+    String(parameters.decomposeIntent || "").trim() ||
+    String(intent?.task || "").trim() ||
+    `Intent ${index + 1}`;
+  const targetText =
+    String(parameters.decomposeTarget || "").trim() ||
+    (Array.isArray(intent?.target) ? intent.target.join(", ") : "");
+  return {
+    intent: intentText,
+    target: targetText,
+    attributes: Array.isArray(parameters.attributes) ? parameters.attributes : [],
+    affected: Array.isArray(parameters.affected) ? parameters.affected : [],
   };
-
-  return nextSpec;
 }
 
-function removeRecommendationSections(panelSpecLike) {
-  return removeSectionsByIdSet(
-    panelSpecLike,
-    new Set(["recommendation_presets", "recommendation_sub_panel", "recommendation_affected_panel"])
-  );
+function ensureDecomposeIntentItems(rawDecomposeJson, intents) {
+  const normalizedIntents = ensureIntentArray(intents);
+  const candidates = [];
+
+  if (Array.isArray(rawDecomposeJson)) {
+    rawDecomposeJson.forEach((item) => {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        candidates.push(item);
+      }
+    });
+  } else if (rawDecomposeJson && typeof rawDecomposeJson === "object") {
+    if (Array.isArray(rawDecomposeJson.intents)) {
+      rawDecomposeJson.intents.forEach((item) => {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          candidates.push(item);
+        }
+      });
+    } else {
+      candidates.push(rawDecomposeJson);
+    }
+  }
+
+  const expectedCount = normalizedIntents.length || candidates.length || 1;
+  const result = [];
+  for (let index = 0; index < expectedCount; index += 1) {
+    const candidate = candidates[index];
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      result.push(candidate);
+      continue;
+    }
+    result.push(buildFallbackDecomposeItemFromIntent(normalizedIntents[index], index));
+  }
+  return result;
+}
+
+function buildPanelGroupLabel({ intent, recommendationJson, panelJson, index }) {
+  const fromPanel = String(panelJson?.label || "").trim();
+  if (fromPanel) {
+    return fromPanel;
+  }
+  const fromTarget = String(recommendationJson?.structure?.target || "").trim();
+  if (fromTarget) {
+    return fromTarget;
+  }
+  const fromIntent = String(recommendationJson?.intent || "").trim();
+  if (fromIntent) {
+    return fromIntent;
+  }
+  const fromTask = String(intent?.task || "").trim();
+  if (fromTask) {
+    return fromTask;
+  }
+  return `Intent ${index + 1}`;
 }
 
 async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
@@ -141,16 +185,23 @@ async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
       ? intentResult.decomposeJson
       : { intents };
 
-  const recommendationResult = await parseRecommendationWithLLM({
-    intentDecomposeJson,
-    imageBase64,
-  });
+  const decomposeIntentItems = ensureDecomposeIntentItems(intentDecomposeJson, intents);
+  const recommendationResults = await Promise.all(
+    decomposeIntentItems.map((item, index) =>
+      parseRecommendationWithLLM({
+        intentDecomposeJson: item,
+        imageBase64,
+      }).catch((error) => {
+        throw new Error(`Recommendation failed for intent ${index + 1}: ${error?.message || "unknown error"}`);
+      })
+    )
+  );
 
   return {
     intents,
     intentDecomposeJson,
-    recommendationJson: recommendationResult?.recommendationJson || {},
-    panelJson: recommendationResult?.panelJson || null,
+    decomposeIntentItems,
+    recommendationResults,
   };
 }
 
@@ -191,11 +242,17 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
         : `LLM parser succeeded (text-only, ${countText}).`,
       "info"
     );
-    const recommendationRequired = result.recommendationJson?.recommendationRequired === true;
+
+    const recommendationResults = Array.isArray(result.recommendationResults)
+      ? result.recommendationResults
+      : [];
+    const recommendationRequiredCount = recommendationResults.filter(
+      (item) => item?.recommendationJson?.recommendationRequired === true
+    ).length;
     pushToast(
-      recommendationRequired
-        ? "Recommendation model succeeded (presets generated)."
-        : "Recommendation model succeeded.",
+      recommendationRequiredCount > 0
+        ? `Recommendation model succeeded (${recommendationRequiredCount}/${recommendationResults.length} intents require presets).`
+        : `Recommendation model succeeded (${recommendationResults.length} intents).`,
       "success"
     );
     return result;
@@ -207,13 +264,18 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
           sourceData,
           imageBase64: null,
         });
-        const intents = result.intents;
         pushToast("Visual parse failed, text-only LLM succeeded (intent + recommendation).", "warning");
-        const recommendationRequired = result.recommendationJson?.recommendationRequired === true;
+
+        const recommendationResults = Array.isArray(result.recommendationResults)
+          ? result.recommendationResults
+          : [];
+        const recommendationRequiredCount = recommendationResults.filter(
+          (item) => item?.recommendationJson?.recommendationRequired === true
+        ).length;
         pushToast(
-          recommendationRequired
-            ? "Recommendation model succeeded (presets generated)."
-            : "Recommendation model succeeded.",
+          recommendationRequiredCount > 0
+            ? `Recommendation model succeeded (${recommendationRequiredCount}/${recommendationResults.length} intents require presets).`
+            : `Recommendation model succeeded (${recommendationResults.length} intents).`,
           "success"
         );
         return result;
@@ -256,16 +318,20 @@ async function handlePromptSubmit(payload) {
   try {
     const llmResult = await resolveIntent({ prompt, userImageBase64 });
     const intents = ensureIntentArray(llmResult?.intents);
+    const recommendationResults = Array.isArray(llmResult?.recommendationResults)
+      ? llmResult.recommendationResults
+      : [];
 
     let nextParts = parts.value;
     let nextPanelSpec = panelSpec.value;
+    const previousPanelGroups = safeDeepClone(panelGroups.value, []);
+    const appendedPanelGroups = [];
+
     if (!intents.length) {
       pushToast("No intent recognized.", "warning");
     } else {
       intents.forEach((intent) => {
         const updatePlan = intentToUpdatePlan(intent, nextParts, nextPanelSpec);
-        // 只保留 source_data 更新；Panel 控件组统一由 recommendation 的 panel_json 生成，
-        // 避免注入 task registry 里的预设控件（如 Layout / Aspect Ratio）。
         const sourceOnlyPlan = {
           sourceDataUpdates: updatePlan?.sourceDataUpdates || [],
           panelUpdates: [],
@@ -276,26 +342,49 @@ async function handlePromptSubmit(payload) {
       });
     }
 
-    const hasLegendIntent = intents.some((intent) => intent?.task === "legend_edit");
-    if (!hasLegendIntent) {
-      nextPanelSpec = removeSectionsByIdSet(nextPanelSpec, new Set(["legend_primary", "legend_detail"]));
+    recommendationResults.forEach((result, index) => {
+      const recommendationPanelPlan = buildRecommendationPanelPlan({
+        recommendationJson: result?.recommendationJson || {},
+        panelJson: result?.panelJson || {},
+        chartParts: nextParts,
+      });
+
+      const groupBaseSpec = createEmptyPanelSpec();
+      const groupState = applyUpdatePlan(nextParts, groupBaseSpec, recommendationPanelPlan);
+      nextParts = groupState.parts;
+
+      const groupLabel = buildPanelGroupLabel({
+        intent: intents[index],
+        recommendationJson: result?.recommendationJson || {},
+        panelJson: result?.panelJson || {},
+        index,
+      });
+
+      appendedPanelGroups.push({
+        id: `intent_group_${Date.now()}_${panelGroupSeed++}`,
+        label: groupLabel,
+        panelSpec: groupState.panelSpec,
+      });
+    });
+
+    const mergedPanelGroups = previousPanelGroups.concat(appendedPanelGroups);
+
+    if (!mergedPanelGroups.length) {
+      nextPanelSpec = createEmptyPanelSpec();
+    } else if (!previousPanelGroups.length) {
+      nextPanelSpec = safeDeepClone(mergedPanelGroups[0].panelSpec, createEmptyPanelSpec());
     }
 
-    const recommendationPanelPlan = buildRecommendationPanelPlan({
-      recommendationJson: llmResult?.recommendationJson || {},
-      panelJson: llmResult?.panelJson || {},
-      chartParts: nextParts,
-    });
-    if ((recommendationPanelPlan?.panelUpdates || []).length) {
-      const cleanedPanelSpec = removeRecommendationSections(nextPanelSpec);
-      const recommendationState = applyUpdatePlan(nextParts, cleanedPanelSpec, recommendationPanelPlan);
-      nextParts = recommendationState.parts;
-      nextPanelSpec = recommendationState.panelSpec;
-      pushToast("Panel controls synchronized from recommendation output.", "info");
+    if (appendedPanelGroups.length) {
+      pushToast(
+        `Added ${appendedPanelGroups.length} panel groups (total ${mergedPanelGroups.length}).`,
+        "info"
+      );
     }
 
     parts.value = nextParts;
     panelSpec.value = nextPanelSpec;
+    panelGroups.value = mergedPanelGroups;
 
     if (intents.length) {
       const intentSummary = intents.map((intent) => `${intent.task} (${intent.action})`).join(" + ");
@@ -327,6 +416,7 @@ async function handleImageUploaded(payload) {
   if (runtimeModeConfig.isDevelopment) {
     parts.value = createChartPartsFromPresetChart();
     panelSpec.value = createEmptyPanelSpec();
+    panelGroups.value = [];
     isPreviewVisible.value = true;
     previewPlaceholderText.value = "";
     llmResponseTick.value += 1;
@@ -344,6 +434,7 @@ async function handleImageUploaded(payload) {
     const generatedParts = await htmlToChartParts(htmlText);
     parts.value = generatedParts;
     panelSpec.value = createEmptyPanelSpec();
+    panelGroups.value = [];
     generated = true;
     pushToast("Chart template generated from uploaded image.", "success");
   } catch (error) {
@@ -394,7 +485,7 @@ async function handleImageUploaded(payload) {
       </div>
 
       <div class="right-column">
-        <ControlPanel :parts="parts" :panel-spec="panelSpec" />
+        <ControlPanel :parts="parts" :panel-spec="panelSpec" :panel-groups="panelGroups" />
       </div>
     </section>
   </main>
