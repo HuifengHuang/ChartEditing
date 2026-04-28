@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { ensureCollectionByPath, getCollectionByPath } from "../utils/collectionUtils";
 import { getValueByPath, setValueByPath } from "../utils/pathUtils";
 
@@ -31,6 +31,11 @@ const singleDraftEditing = ref(false);
 const multiDraftValue = ref("");
 const multiDraftEditing = ref(false);
 const tableCellDraftMap = ref({});
+const HOLD_START_DELAY_MS = 280;
+const HOLD_REPEAT_MS = 80;
+let holdStartTimer = null;
+let holdRepeatTimer = null;
+let holdActiveKey = "";
 
 // 根据 visibilityCondition 动态决定控件是否显示。
 const isVisible = computed(() => {
@@ -596,6 +601,76 @@ function onTableCellStep(rowIndex, column, row, direction) {
   clearTableCellDraft(rowIndex, column);
 }
 
+function clearHoldTimers() {
+  if (holdStartTimer) {
+    clearTimeout(holdStartTimer);
+    holdStartTimer = null;
+  }
+  if (holdRepeatTimer) {
+    clearInterval(holdRepeatTimer);
+    holdRepeatTimer = null;
+  }
+}
+
+function removeGlobalHoldListeners() {
+  window.removeEventListener("pointerup", stopContinuousStep);
+  window.removeEventListener("pointercancel", stopContinuousStep);
+  window.removeEventListener("blur", stopContinuousStep);
+}
+
+function stopContinuousStep() {
+  clearHoldTimers();
+  removeGlobalHoldListeners();
+  holdActiveKey = "";
+}
+
+function startContinuousStep(stepKey, stepFn) {
+  stopContinuousStep();
+  holdActiveKey = stepKey;
+  stepFn();
+
+  holdStartTimer = setTimeout(() => {
+    if (holdActiveKey !== stepKey) {
+      return;
+    }
+    holdRepeatTimer = setInterval(() => {
+      if (holdActiveKey !== stepKey) {
+        return;
+      }
+      stepFn();
+    }, HOLD_REPEAT_MS);
+  }, HOLD_START_DELAY_MS);
+
+  window.addEventListener("pointerup", stopContinuousStep);
+  window.addEventListener("pointercancel", stopContinuousStep);
+  window.addEventListener("blur", stopContinuousStep);
+}
+
+function onStepPointerDown(event, stepKey, stepFn) {
+  event.preventDefault();
+  startContinuousStep(stepKey, stepFn);
+}
+
+function onStepPointerUp() {
+  stopContinuousStep();
+}
+
+function onStepPointerLeave() {
+  stopContinuousStep();
+}
+
+function onStepKeydown(event, stepFn) {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+  event.preventDefault();
+  stepFn();
+}
+
+onBeforeUnmount(() => {
+  stopContinuousStep();
+});
+
 // 表格“加行”操作。
 function onTableAddRow() {
   emit("add-item", {
@@ -673,8 +748,28 @@ function isNumberLikeColumn(column) {
           @keydown.enter="onSingleDraftEnter"
         />
         <div class="number-stepper">
-          <button type="button" class="step-btn step-dec" @click="onSingleStep(-1)">-</button>
-          <button type="button" class="step-btn step-inc" @click="onSingleStep(1)">+</button>
+          <button
+            type="button"
+            class="step-btn step-dec"
+            @pointerdown="onStepPointerDown($event, `single_dec_${control.id}`, () => onSingleStep(-1))"
+            @pointerup="onStepPointerUp"
+            @pointerleave="onStepPointerLeave"
+            @pointercancel="onStepPointerUp"
+            @keydown="onStepKeydown($event, () => onSingleStep(-1))"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            class="step-btn step-inc"
+            @pointerdown="onStepPointerDown($event, `single_inc_${control.id}`, () => onSingleStep(1))"
+            @pointerup="onStepPointerUp"
+            @pointerleave="onStepPointerLeave"
+            @pointercancel="onStepPointerUp"
+            @keydown="onStepKeydown($event, () => onSingleStep(1))"
+          >
+            +
+          </button>
         </div>
       </div>
 
@@ -743,8 +838,28 @@ function isNumberLikeColumn(column) {
           @keydown.enter="onMultiDraftEnter"
         />
         <div class="number-stepper">
-          <button type="button" class="step-btn step-dec" @click="onMultiStep(-1)">-</button>
-          <button type="button" class="step-btn step-inc" @click="onMultiStep(1)">+</button>
+          <button
+            type="button"
+            class="step-btn step-dec"
+            @pointerdown="onStepPointerDown($event, `multi_dec_${control.id}`, () => onMultiStep(-1))"
+            @pointerup="onStepPointerUp"
+            @pointerleave="onStepPointerLeave"
+            @pointercancel="onStepPointerUp"
+            @keydown="onStepKeydown($event, () => onMultiStep(-1))"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            class="step-btn step-inc"
+            @pointerdown="onStepPointerDown($event, `multi_inc_${control.id}`, () => onMultiStep(1))"
+            @pointerup="onStepPointerUp"
+            @pointerleave="onStepPointerLeave"
+            @pointercancel="onStepPointerUp"
+            @keydown="onStepKeydown($event, () => onMultiStep(1))"
+          >
+            +
+          </button>
         </div>
       </div>
 
@@ -829,8 +944,28 @@ function isNumberLikeColumn(column) {
                     @keydown.enter="onTableCellEnter"
                   />
                   <div class="number-stepper table-number-stepper">
-                    <button type="button" class="step-btn step-dec" @click="onTableCellStep(rowIndex, column, row, -1)">-</button>
-                    <button type="button" class="step-btn step-inc" @click="onTableCellStep(rowIndex, column, row, 1)">+</button>
+                    <button
+                      type="button"
+                      class="step-btn step-dec"
+                      @pointerdown="onStepPointerDown($event, `table_row_dec_${rowIndex}_${column.key}`, () => onTableCellStep(rowIndex, column, row, -1))"
+                      @pointerup="onStepPointerUp"
+                      @pointerleave="onStepPointerLeave"
+                      @pointercancel="onStepPointerUp"
+                      @keydown="onStepKeydown($event, () => onTableCellStep(rowIndex, column, row, -1))"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      class="step-btn step-inc"
+                      @pointerdown="onStepPointerDown($event, `table_row_inc_${rowIndex}_${column.key}`, () => onTableCellStep(rowIndex, column, row, 1))"
+                      @pointerup="onStepPointerUp"
+                      @pointerleave="onStepPointerLeave"
+                      @pointercancel="onStepPointerUp"
+                      @keydown="onStepKeydown($event, () => onTableCellStep(rowIndex, column, row, 1))"
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
                 <input
@@ -881,8 +1016,28 @@ function isNumberLikeColumn(column) {
                     @keydown.enter="onTableCellEnter"
                   />
                   <div class="number-stepper table-number-stepper">
-                    <button type="button" class="step-btn step-dec" @click="onTableCellStep(rowIndex, column, row, -1)">-</button>
-                    <button type="button" class="step-btn step-inc" @click="onTableCellStep(rowIndex, column, row, 1)">+</button>
+                    <button
+                      type="button"
+                      class="step-btn step-dec"
+                      @pointerdown="onStepPointerDown($event, `table_col_dec_${rowIndex}_${column.key}`, () => onTableCellStep(rowIndex, column, row, -1))"
+                      @pointerup="onStepPointerUp"
+                      @pointerleave="onStepPointerLeave"
+                      @pointercancel="onStepPointerUp"
+                      @keydown="onStepKeydown($event, () => onTableCellStep(rowIndex, column, row, -1))"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      class="step-btn step-inc"
+                      @pointerdown="onStepPointerDown($event, `table_col_inc_${rowIndex}_${column.key}`, () => onTableCellStep(rowIndex, column, row, 1))"
+                      @pointerup="onStepPointerUp"
+                      @pointerleave="onStepPointerLeave"
+                      @pointercancel="onStepPointerUp"
+                      @keydown="onStepKeydown($event, () => onTableCellStep(rowIndex, column, row, 1))"
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
                 <input

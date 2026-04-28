@@ -19,6 +19,7 @@ const props = defineProps({
 });
 
 const iframeRef = ref(null);
+const viewportRef = ref(null);
 
 function onFrameLoad() {
   emit("chart-rendered");
@@ -132,8 +133,40 @@ async function captureChartImageBase64() {
   return svgToPngBase64(svg);
 }
 
+// 获取 Chart Preview 可用渲染区域尺寸，用于指导模型设置画布大小。
+function getPreviewMaxSize() {
+  const viewportEl = viewportRef.value;
+  if (!viewportEl) {
+    return null;
+  }
+
+  const style = window.getComputedStyle(viewportEl);
+  const paddingX =
+    (Number.parseFloat(style.paddingLeft || "0") || 0) +
+    (Number.parseFloat(style.paddingRight || "0") || 0);
+  const paddingY =
+    (Number.parseFloat(style.paddingTop || "0") || 0) +
+    (Number.parseFloat(style.paddingBottom || "0") || 0);
+
+  // iframe 默认有 1px 边框，另外再预留少量安全留白，避免图形贴边或被裁切。
+  const iframeBorderX = 2;
+  const iframeBorderY = 2;
+  const safeInsetX = 24;
+  const safeInsetY = 24;
+
+  const usableWidth = viewportEl.clientWidth - paddingX - iframeBorderX - safeInsetX;
+  const usableHeight = viewportEl.clientHeight - paddingY - iframeBorderY - safeInsetY;
+  const maxWidth = Math.max(1, Math.floor(usableWidth));
+  const maxHeight = Math.max(1, Math.floor(usableHeight));
+  return {
+    maxWidth,
+    maxHeight,
+  };
+}
+
 defineExpose({
   captureChartImageBase64,
+  getPreviewMaxSize,
 });
 </script>
 
@@ -146,17 +179,19 @@ defineExpose({
       </button>
     </header>
     <div class="title-divider" aria-hidden="true"></div>
-    <div v-if="!isChartVisible" class="preview-rebuild-placeholder">
-      {{ placeholderText }}
+    <div ref="viewportRef" class="preview-viewport">
+      <div v-if="!isChartVisible" class="preview-rebuild-placeholder">
+        {{ placeholderText }}
+      </div>
+      <iframe
+        v-else
+        ref="iframeRef"
+        :srcdoc="htmlContent"
+        sandbox="allow-scripts allow-same-origin"
+        title="chart-preview"
+        @load="onFrameLoad"
+      ></iframe>
     </div>
-    <iframe
-      v-else
-      ref="iframeRef"
-      :srcdoc="htmlContent"
-      sandbox="allow-scripts allow-same-origin"
-      title="chart-preview"
-      @load="onFrameLoad"
-    ></iframe>
   </section>
 </template>
 
@@ -206,19 +241,25 @@ defineExpose({
 }
 
 iframe {
-  margin-top: 10px;
   width: 100%;
-  flex: 1;
+  height: 100%;
   min-height: 0;
   border: 1px solid #d1d5db;
   border-radius: 10px;
   background: #ffffff;
 }
 
-.preview-rebuild-placeholder {
+.preview-viewport {
   margin-top: 10px;
   width: 100%;
   flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.preview-rebuild-placeholder {
+  width: 100%;
+  height: 100%;
   min-height: 0;
   border: 1px dashed #cbd5e1;
   border-radius: 10px;

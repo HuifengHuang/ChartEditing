@@ -239,6 +239,15 @@ async function captureCurrentChartImage() {
   return captureFn();
 }
 
+async function resolvePreviewMaxSize() {
+  await nextTick();
+  const getSizeFn = chartPreviewRef.value?.getPreviewMaxSize;
+  if (typeof getSizeFn !== "function") {
+    return null;
+  }
+  return getSizeFn();
+}
+
 async function resolveImageBase64(userImageBase64) {
   let imageBase64 =
     typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
@@ -549,7 +558,8 @@ async function handleImageUploaded(payload) {
   let generated = false;
 
   try {
-    const htmlText = await generateChartHtmlFromImage({ imageBase64 });
+    const previewMaxSize = await resolvePreviewMaxSize();
+    const htmlText = await generateChartHtmlFromImage({ imageBase64, previewMaxSize });
     const generatedParts = await htmlToChartParts(htmlText);
     parts.value = generatedParts;
     panelSpec.value = createEmptyPanelSpec();
