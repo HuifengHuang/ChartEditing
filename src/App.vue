@@ -3,7 +3,7 @@ import { computed, nextTick, ref, toRaw } from "vue";
 import UserInput from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
-import presetChart from "./data/preset_chart.json";
+import { defaultPresetId, presetCharts, resolvePresetById } from "./data/presetCharts.js";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
@@ -29,13 +29,14 @@ function createEmptyChartParts() {
   };
 }
 
-function createChartPartsFromPresetChart() {
+function createChartPartsFromPresetChart(presetData) {
+  const resolvedPreset = presetData && typeof presetData === "object" ? presetData : {};
   return {
-    source_data: structuredClone(presetChart.source_data || {}),
+    source_data: structuredClone(resolvedPreset.source_data || {}),
     html_template: {
-      title: presetChart.title || "Chart Preview",
-      import_script: presetChart.import_script || "",
-      render_script: presetChart.render_script || "",
+      title: resolvedPreset.title || "Chart Preview",
+      import_script: resolvedPreset.import_script || "",
+      render_script: resolvedPreset.render_script || "",
     },
   };
 }
@@ -65,11 +66,16 @@ function safeDeepClone(value, fallback = {}) {
 
 const parts = ref(
   runtimeModeConfig.isDevelopment
-    ? createChartPartsFromPresetChart()
+    ? createChartPartsFromPresetChart(resolvePresetById(defaultPresetId)?.data)
     : createEmptyChartParts()
 );
 const panelSpec = ref(createEmptyPanelSpec());
 const panelGroups = ref([]);
+const selectedPresetId = ref(defaultPresetId);
+const presetOptions = presetCharts.map((item) => ({
+  id: item.id,
+  label: item.label,
+}));
 const chartPreviewRef = ref(null);
 const controlPanelRef = ref(null);
 
@@ -88,6 +94,33 @@ const htmlContent = computed(() => buildChartHtml(parts.value));
 
 function handleChartRendered() {
   chartRenderedTick.value += 1;
+}
+
+function applyPresetById(presetId) {
+  const matchedPreset = resolvePresetById(presetId);
+  if (!matchedPreset) {
+    return;
+  }
+  selectedPresetId.value = matchedPreset.id;
+  parts.value = createChartPartsFromPresetChart(matchedPreset.data);
+  panelSpec.value = createEmptyPanelSpec();
+  panelGroups.value = [];
+  latestIntentGroups.value = [];
+  isPreviewVisible.value = true;
+  previewPlaceholderText.value = "";
+  llmResponseTick.value += 1;
+  pushToast(`Preset switched to "${matchedPreset.label}".`, "info");
+}
+
+function handlePresetChanged(payload) {
+  if (!runtimeModeConfig.isDevelopment || busy.value) {
+    return;
+  }
+  const nextPresetId = String(payload?.presetId || "").trim();
+  if (!nextPresetId || nextPresetId === selectedPresetId.value) {
+    return;
+  }
+  applyPresetById(nextPresetId);
 }
 
 function handleFocusIntentGroup(payload) {
@@ -541,14 +574,8 @@ async function handleImageUploaded(payload) {
   }
 
   if (runtimeModeConfig.isDevelopment) {
-    parts.value = createChartPartsFromPresetChart();
-    panelSpec.value = createEmptyPanelSpec();
-    panelGroups.value = [];
-    latestIntentGroups.value = [];
-    isPreviewVisible.value = true;
-    previewPlaceholderText.value = "";
-    llmResponseTick.value += 1;
-    pushToast("Development mode: loaded preset_chart.json without LLM call.", "info");
+    applyPresetById(selectedPresetId.value);
+    pushToast("Development mode: loaded selected preset without LLM call.", "info");
     return;
   }
 
@@ -600,6 +627,9 @@ async function handleImageUploaded(payload) {
       <div class="left-column">
         <UserInput
           :busy="busy"
+          :is-development="runtimeModeConfig.isDevelopment"
+          :preset-options="presetOptions"
+          :selected-preset-id="selectedPresetId"
           :llm-response-tick="llmResponseTick"
           :chart-rendered-tick="chartRenderedTick"
           :is-chart-visible="isPreviewVisible"
@@ -607,6 +637,7 @@ async function handleImageUploaded(payload) {
           @submit-prompt="handlePromptSubmit"
           @image-uploaded="handleImageUploaded"
           @focus-intent-group="handleFocusIntentGroup"
+          @preset-changed="handlePresetChanged"
         />
       </div>
 
