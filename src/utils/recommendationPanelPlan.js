@@ -476,7 +476,7 @@ export function buildRecommendationPanelPlan({ recommendationJson, panelJson, ch
   }
 
   if (subPanelItems.length) {
-    panelUpdates.push(createSection("recommendation_sub_panel", "Recommendation Controls", "primary"));
+    panelUpdates.push(createSection("recommendation_sub_panel", "Target Fields", "primary"));
     subPanelItems.forEach((item, index) => {
       const controls = buildControlsByItem({ item, index, idPrefix: "recommendation_sub", chartParts });
       controls.forEach((control) => {
@@ -490,7 +490,7 @@ export function buildRecommendationPanelPlan({ recommendationJson, panelJson, ch
   }
 
   if (affectedItems.length) {
-    panelUpdates.push(createSection("recommendation_affected_panel", "Affected Controls", "detail"));
+    panelUpdates.push(createSection("recommendation_affected_panel", "Affected Fields", "detail"));
     affectedItems.forEach((item, index) => {
       const controls = buildControlsByItem({
         item,

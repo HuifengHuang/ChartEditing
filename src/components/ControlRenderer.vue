@@ -31,11 +31,14 @@ const singleDraftEditing = ref(false);
 const multiDraftValue = ref("");
 const multiDraftEditing = ref(false);
 const tableCellDraftMap = ref({});
+const arrayItemDraftMap = ref({});
+const activeArrayCell = ref(null);
 const HOLD_START_DELAY_MS = 280;
 const HOLD_REPEAT_MS = 80;
 let holdStartTimer = null;
 let holdRepeatTimer = null;
 let holdActiveKey = "";
+const colorHexPattern = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 // 根据 visibilityCondition 动态决定控件是否显示。
 const isVisible = computed(() => {
@@ -407,22 +410,6 @@ function onRemoveAction() {
 
 // 自动推断表格 schema（根据现有数据类型）。
 function inferAutoSchema(rows) {
-  const colorHexPattern = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-
-  // 根据样本值推断字段类型，优先 number/boolean/color。
-  function detectValueType(value) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return "number";
-    }
-    if (typeof value === "boolean") {
-      return "boolean";
-    }
-    if (typeof value === "string" && colorHexPattern.test(value.trim())) {
-      return "color";
-    }
-    return "string";
-  }
-
   const keys = new Set();
   const sampleTypeByKey = new Map();
   rows.forEach((item) => {
@@ -435,10 +422,10 @@ function inferAutoSchema(rows) {
   });
 
   return Array.from(keys).map((key) => ({
+    valueType: sampleTypeByKey.get(key) || "string",
+    editable: (sampleTypeByKey.get(key) || "string") !== "array",
     key,
     label: key,
-    valueType: sampleTypeByKey.get(key) || "string",
-    editable: true,
     hidden: false,
   }));
 }
@@ -489,6 +476,169 @@ const tableColumns = computed(() => {
   return autoSchema.filter((column) => !column.hidden);
 });
 
+function isArrayColumn(column) {
+  return String(column?.valueType || "").toLowerCase() === "array";
+}
+
+function formatArrayPreview(value) {
+  if (!Array.isArray(value)) {
+    return "";
+  }
+  const formatItem = (item) => {
+    if (item == null) {
+      return "null";
+    }
+    if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+      return String(item);
+    }
+    if (Array.isArray(item)) {
+      return "[...]";
+    }
+    return "{...}";
+  };
+  const limit = 4;
+  const head = value.slice(0, limit).map((item) => formatItem(item)).join(", ");
+  const suffix = value.length > limit ? ", ..." : "";
+  return `[${head}${suffix}]`;
+}
+
+function formatReadonlyValue(value) {
+  if (Array.isArray(value)) {
+    return formatArrayPreview(value);
+  }
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "{...}";
+    }
+  }
+  if (value == null) {
+    return "";
+  }
+  return String(value);
+}
+
+function onArrayCellClick(rowIndex, column, row) {
+  const rawValue = row?.[column?.key];
+  if (!Array.isArray(rawValue)) {
+    return;
+  }
+  activeArrayCell.value = {
+    rowIndex,
+    columnKey: column.key,
+  };
+  arrayItemDraftMap.value = {};
+}
+
+function getArrayItemDraftKey(rowIndex, columnKey, itemIndex) {
+  return `${rowIndex}::${columnKey}::${itemIndex}`;
+}
+
+function getArrayItemDisplayValue(rowIndex, columnKey, itemIndex, fallbackValue) {
+  const key = getArrayItemDraftKey(rowIndex, columnKey, itemIndex);
+  if (Object.prototype.hasOwnProperty.call(arrayItemDraftMap.value, key)) {
+    return arrayItemDraftMap.value[key];
+  }
+  return fallbackValue ?? "";
+}
+
+function onArrayItemDraftInput(rowIndex, columnKey, itemIndex, rawValue) {
+  const key = getArrayItemDraftKey(rowIndex, columnKey, itemIndex);
+  arrayItemDraftMap.value = {
+    ...arrayItemDraftMap.value,
+    [key]: rawValue,
+  };
+}
+
+function clearArrayItemDraft(rowIndex, columnKey, itemIndex) {
+  const key = getArrayItemDraftKey(rowIndex, columnKey, itemIndex);
+  if (!Object.prototype.hasOwnProperty.call(arrayItemDraftMap.value, key)) {
+    return;
+  }
+  const next = { ...arrayItemDraftMap.value };
+  delete next[key];
+  arrayItemDraftMap.value = next;
+}
+
+function normalizeArrayItemValue(rawValue, valueType) {
+  if (valueType === "number") {
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (valueType === "boolean") {
+    return Boolean(rawValue);
+  }
+  if (valueType === "color") {
+    const text = String(rawValue || "").trim();
+    return colorHexPattern.test(text) ? text : "#000000";
+  }
+  return rawValue == null ? "" : String(rawValue);
+}
+
+function commitArrayItemDraft(rowIndex, columnKey, itemIndex, valueType, fallbackRawValue = "") {
+  const key = getArrayItemDraftKey(rowIndex, columnKey, itemIndex);
+  const hasDraft = Object.prototype.hasOwnProperty.call(arrayItemDraftMap.value, key);
+  const rawValue = hasDraft ? arrayItemDraftMap.value[key] : fallbackRawValue;
+  emitPatch({
+    [`${props.control.targetCollection}.${rowIndex}.${columnKey}.${itemIndex}`]:
+      normalizeArrayItemValue(rawValue, valueType),
+  });
+  clearArrayItemDraft(rowIndex, columnKey, itemIndex);
+}
+
+function onArrayItemBlur(rowIndex, columnKey, itemIndex, valueType, event) {
+  commitArrayItemDraft(
+    rowIndex,
+    columnKey,
+    itemIndex,
+    valueType,
+    event?.target?.value ?? ""
+  );
+}
+
+function onArrayItemEnter(event) {
+  event.preventDefault();
+  event.target.blur();
+}
+
+function onArrayItemBooleanChange(rowIndex, columnKey, itemIndex, checked) {
+  emitPatch({
+    [`${props.control.targetCollection}.${rowIndex}.${columnKey}.${itemIndex}`]: Boolean(checked),
+  });
+}
+
+const activeArrayEditor = computed(() => {
+  const active = activeArrayCell.value;
+  if (!active) {
+    return null;
+  }
+  const row = collection.value?.[active.rowIndex];
+  if (!row) {
+    return null;
+  }
+  const rawArray = row?.[active.columnKey];
+  if (!Array.isArray(rawArray)) {
+    return null;
+  }
+  const rowLabelKey = props.control.rowKey;
+  const rowLabel = rowLabelKey
+    ? String(row?.[rowLabelKey] ?? `Row ${active.rowIndex + 1}`)
+    : `Row ${active.rowIndex + 1}`;
+
+  return {
+    rowIndex: active.rowIndex,
+    columnKey: active.columnKey,
+    rowLabel,
+    title: `${active.columnKey} (${rowLabel})`,
+    items: rawArray.map((item, index) => ({
+      index,
+      valueType: detectValueType(item),
+      value: item,
+    })),
+  };
+});
+
 // 计算表格方向：固定值优先，其次读取 orientationKey，默认 row-major。
 const tableOrientation = computed(() => {
   if (props.control.controlType !== "table") {
@@ -529,6 +679,22 @@ watch(
   { immediate: true }
 );
 
+watch(
+  [collection, tableColumns],
+  () => {
+    if (!activeArrayCell.value) {
+      return;
+    }
+    const row = collection.value?.[activeArrayCell.value.rowIndex];
+    const columnExists = tableColumns.value.some((column) => column.key === activeArrayCell.value.columnKey);
+    if (!row || !columnExists || !Array.isArray(row?.[activeArrayCell.value.columnKey])) {
+      activeArrayCell.value = null;
+      arrayItemDraftMap.value = {};
+    }
+  },
+  { deep: true }
+);
+
 // 标准化表格单元格输入值。
 function normalizeTableCellValue(rawValue, column) {
   return normalizeInputValue(rawValue, column.valueType, column.valueType);
@@ -540,6 +706,25 @@ function onTableCellInput(rowIndex, column, rawValue) {
   emitPatch({
     [path]: normalizeTableCellValue(rawValue, column),
   });
+}
+
+function detectValueType(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return "number";
+  }
+  if (typeof value === "boolean") {
+    return "boolean";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  if (value && typeof value === "object") {
+    return "object";
+  }
+  if (typeof value === "string" && colorHexPattern.test(value.trim())) {
+    return "color";
+  }
+  return "string";
 }
 
 // 表格单元格编辑草稿：失焦时才提交到 parts。
@@ -968,6 +1153,14 @@ function isNumberLikeColumn(column) {
                     </button>
                   </div>
                 </div>
+                <button
+                  v-else-if="isArrayColumn(column)"
+                  type="button"
+                  class="array-cell-btn"
+                  @click="onArrayCellClick(rowIndex, column, row)"
+                >
+                  {{ formatArrayPreview(row?.[column.key]) || "[]" }}
+                </button>
                 <input
                   v-else-if="column.editable !== false"
                   :type="column.valueType === 'color' ? 'color' : 'text'"
@@ -976,7 +1169,7 @@ function isNumberLikeColumn(column) {
                   @blur="onTableCellBlur(rowIndex, column, $event)"
                   @keydown.enter="onTableCellEnter"
                 />
-                <span v-else>{{ row?.[column.key] }}</span>
+                <span v-else>{{ formatReadonlyValue(row?.[column.key]) }}</span>
               </td>
               <td v-if="isRowActionEnabled('remove')">
                 <button type="button" class="danger-btn" @click="onTableRemoveRow(rowIndex, row)">Remove</button>
@@ -1040,6 +1233,14 @@ function isNumberLikeColumn(column) {
                     </button>
                   </div>
                 </div>
+                <button
+                  v-else-if="isArrayColumn(column)"
+                  type="button"
+                  class="array-cell-btn"
+                  @click="onArrayCellClick(rowIndex, column, row)"
+                >
+                  {{ formatArrayPreview(row?.[column.key]) || "[]" }}
+                </button>
                 <input
                   v-else-if="column.editable !== false"
                   :type="column.valueType === 'color' ? 'color' : 'text'"
@@ -1048,11 +1249,135 @@ function isNumberLikeColumn(column) {
                   @blur="onTableCellBlur(rowIndex, column, $event)"
                   @keydown.enter="onTableCellEnter"
                 />
-                <span v-else>{{ row?.[column.key] }}</span>
+                <span v-else>{{ formatReadonlyValue(row?.[column.key]) }}</span>
               </td>
             </tr>
           </tbody>
         </table>
+
+        <div v-if="activeArrayEditor" class="array-editor-wrap">
+          <div class="array-editor-header">
+            <span class="array-editor-title">{{ activeArrayEditor.title }}</span>
+          </div>
+          <div class="array-editor-grid">
+            <div
+              v-for="item in activeArrayEditor.items"
+              :key="`${activeArrayEditor.rowIndex}_${activeArrayEditor.columnKey}_${item.index}`"
+              class="array-editor-item"
+            >
+              <label class="array-editor-label">[{{ item.index }}]</label>
+
+              <input
+                v-if="item.valueType === 'number'"
+                class="no-spinner"
+                type="number"
+                :value="
+                  getArrayItemDisplayValue(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    item.value
+                  )
+                "
+                @input="
+                  onArrayItemDraftInput(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    $event.target.value
+                  )
+                "
+                @blur="
+                  onArrayItemBlur(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    item.valueType,
+                    $event
+                  )
+                "
+                @keydown.enter="onArrayItemEnter"
+              />
+
+              <input
+                v-else-if="item.valueType === 'color'"
+                type="color"
+                :value="
+                  getArrayItemDisplayValue(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    item.value
+                  )
+                "
+                @input="
+                  onArrayItemDraftInput(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    $event.target.value
+                  )
+                "
+                @blur="
+                  onArrayItemBlur(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    item.valueType,
+                    $event
+                  )
+                "
+              />
+
+              <label v-else-if="item.valueType === 'boolean'" class="toggle-wrap">
+                <input
+                  type="checkbox"
+                  :checked="Boolean(item.value)"
+                  @change="
+                    onArrayItemBooleanChange(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      $event.target.checked
+                    )
+                  "
+                />
+                <span>{{ Boolean(item.value) ? "On" : "Off" }}</span>
+              </label>
+
+              <input
+                v-else
+                type="text"
+                :value="
+                  getArrayItemDisplayValue(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    item.value
+                  )
+                "
+                @input="
+                  onArrayItemDraftInput(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    $event.target.value
+                  )
+                "
+                @blur="
+                  onArrayItemBlur(
+                    activeArrayEditor.rowIndex,
+                    activeArrayEditor.columnKey,
+                    item.index,
+                    item.valueType,
+                    $event
+                  )
+                "
+                @keydown.enter="onArrayItemEnter"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-else class="unsupported">
@@ -1220,6 +1545,63 @@ select {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.array-cell-btn {
+  width: 100%;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.array-cell-btn:hover {
+  background: #eef2ff;
+  border-color: #93c5fd;
+}
+
+.array-editor-wrap {
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.array-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.array-editor-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.array-editor-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.array-editor-item {
+  min-width: 160px;
+  max-width: 260px;
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.array-editor-label {
+  font-size: 11px;
+  color: #475569;
 }
 
 .table-toolbar {
