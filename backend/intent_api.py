@@ -102,6 +102,30 @@ def append_model_log_readable(entry: Dict[str, Any]) -> None:
                 else:
                     log_file.write(_pretty_json(panel_parse_output) + "\n")
 
+            if "result_json" in entry:
+                log_file.write("\n[result_json]\n")
+                result_json = entry.get("result_json")
+                if isinstance(result_json, str):
+                    log_file.write(_normalize_multiline_text(result_json).rstrip() + "\n")
+                else:
+                    log_file.write(_pretty_json(result_json) + "\n")
+
+            if "recommendation_json" in entry:
+                log_file.write("\n[recommendation_json]\n")
+                recommendation_json = entry.get("recommendation_json")
+                if isinstance(recommendation_json, str):
+                    log_file.write(_normalize_multiline_text(recommendation_json).rstrip() + "\n")
+                else:
+                    log_file.write(_pretty_json(recommendation_json) + "\n")
+
+            if "panel_json" in entry:
+                log_file.write("\n[panel_json]\n")
+                panel_json = entry.get("panel_json")
+                if isinstance(panel_json, str):
+                    log_file.write(_normalize_multiline_text(panel_json).rstrip() + "\n")
+                else:
+                    log_file.write(_pretty_json(panel_json) + "\n")
+
     except Exception:
         # 可读日志写入失败不影响主流程。
         pass
@@ -303,6 +327,12 @@ def create_app() -> Flask:
         except Exception:
             raw_text = ""
 
+        result_json: Optional[Any] = None
+        try:
+            result_json = json.loads(raw_text)
+        except Exception:
+            result_json = None
+
         recommendation_json: Optional[Dict[str, Any]] = None
         panel_json: Optional[Dict[str, Any]] = None
         if provider == "recommendation":
@@ -373,6 +403,9 @@ def create_app() -> Flask:
                 "timestamp": now_iso_utc(),
                 "model": config["model"],
                 "content": raw_text,
+                "result_json": result_json,
+                "recommendation_json": recommendation_json,
+                "panel_json": panel_json,
                 "duration_ms": int((time.time() - started_at) * 1000),
             }
         )

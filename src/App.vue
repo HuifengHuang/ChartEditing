@@ -11,9 +11,12 @@ import { applyUpdatePlan } from "./utils/applyUpdatePlan";
 import { runtimeModeConfig } from "./config/runtimeModeConfig.js";
 import { parseIntentWithLLM } from "./llm/intentParserLLM.js";
 import { parseRecommendationWithLLM } from "./llm/recommendationLLM.js";
+import { parseIntentFeasibilityPrecheckWithLLM } from "./llm/intentFeasibilityPrecheckLLM.js";
+import { parseRenderIncrementalUpdateWithLLM } from "./llm/renderIncrementalUpdateLLM.js";
 import { generateChartHtmlFromImage } from "./llm/chartCodeGeneratorLLM.js";
 import { htmlToChartParts } from "./utils/htmlToChartParts.js";
 import { buildRecommendationPanelPlan } from "./utils/recommendationPanelPlan.js";
+import { applyIncrementalRenderUpdate } from "./utils/applyIncrementalRenderUpdate.js";
 
 function createEmptyChartParts() {
   return {
@@ -232,8 +235,7 @@ async function captureCurrentChartImage() {
   return captureFn();
 }
 
-async function resolveIntent({ prompt, userImageBase64 = null }) {
-  const sourceData = safeDeepClone(parts.value?.source_data, {});
+async function resolveImageBase64(userImageBase64) {
   let imageBase64 =
     typeof userImageBase64 === "string" && userImageBase64.trim() ? userImageBase64.trim() : null;
 
@@ -244,6 +246,78 @@ async function resolveIntent({ prompt, userImageBase64 = null }) {
       imageBase64 = null;
     }
   }
+  return imageBase64;
+}
+
+async function runFeasibilityPrecheckAndMaybePatch({
+  prompt,
+  sourceData,
+  renderScript,
+  imageBase64,
+  baseParts,
+}) {
+  const precheckResult = await parseIntentFeasibilityPrecheckWithLLM({
+    prompt,
+    sourceData,
+    imageBase64,
+  });
+
+  const precheckJson =
+    precheckResult?.precheckJson &&
+    typeof precheckResult.precheckJson === "object" &&
+    !Array.isArray(precheckResult.precheckJson)
+      ? precheckResult.precheckJson
+      : { intents: [], all_data_only: true };
+
+  const precheckIntents = Array.isArray(precheckJson.intents) ? precheckJson.intents : [];
+  const renderRequiredIntents = precheckIntents.filter((item) => item?.needs_render_update === true);
+
+  pushToast(
+    precheckJson.all_data_only === true
+      ? "Feasibility precheck: all intents are data-only."
+      : `Feasibility precheck: ${renderRequiredIntents.length} intent(s) require render incremental update.`,
+    "info"
+  );
+
+  if (precheckJson.all_data_only === true || !renderRequiredIntents.length) {
+    return {
+      parts: baseParts,
+      precheckJson,
+      incrementalJson: null,
+      incrementalSummary: null,
+    };
+  }
+
+  const incrementalResult = await parseRenderIncrementalUpdateWithLLM({
+    renderRequiredIntents,
+    sourceData,
+    renderScript,
+    imageBase64,
+  });
+
+  const applied = applyIncrementalRenderUpdate(baseParts, incrementalResult?.incrementalJson || {});
+  const summary = applied?.summary || {};
+  pushToast(
+    `Incremental render update applied (source +${summary.source_add_applied || 0}, render inserts ${
+      summary.render_insert_applied || 0
+    }).`,
+    "success"
+  );
+
+  return {
+    parts: applied.parts,
+    precheckJson,
+    incrementalJson: incrementalResult?.incrementalJson || null,
+    incrementalSummary: summary,
+  };
+}
+
+async function resolveIntent({ prompt, userImageBase64 = null, sourceDataOverride = null }) {
+  const sourceData =
+    sourceDataOverride && typeof sourceDataOverride === "object"
+      ? safeDeepClone(sourceDataOverride, {})
+      : safeDeepClone(parts.value?.source_data, {});
+  let imageBase64 = await resolveImageBase64(userImageBase64);
 
   try {
     const result = await runIntentAndRecommendation({
@@ -335,13 +409,29 @@ async function handlePromptSubmit(payload) {
   latestIntentGroups.value = [];
 
   try {
-    const llmResult = await resolveIntent({ prompt, userImageBase64 });
+    const resolvedImageBase64 = await resolveImageBase64(userImageBase64);
+
+    let workingParts = safeDeepClone(parts.value, createEmptyChartParts());
+    const precheckState = await runFeasibilityPrecheckAndMaybePatch({
+      prompt,
+      sourceData: safeDeepClone(workingParts?.source_data, {}),
+      renderScript: workingParts?.html_template?.render_script || "",
+      imageBase64: resolvedImageBase64,
+      baseParts: workingParts,
+    });
+    workingParts = precheckState.parts;
+
+    const llmResult = await resolveIntent({
+      prompt,
+      userImageBase64: resolvedImageBase64,
+      sourceDataOverride: workingParts?.source_data || {},
+    });
     const intents = ensureIntentArray(llmResult?.intents);
     const recommendationResults = Array.isArray(llmResult?.recommendationResults)
       ? llmResult.recommendationResults
       : [];
 
-    let nextParts = parts.value;
+    let nextParts = workingParts;
     let nextPanelSpec = panelSpec.value;
     const previousPanelGroups = safeDeepClone(panelGroups.value, []);
     const appendedPanelGroups = [];
