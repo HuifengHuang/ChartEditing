@@ -1,0 +1,254 @@
+{
+  "title": "U.S. Exports to Cuba",
+  "import_script": "<script src=\"https://cdn.jsdelivr.net/npm/d3@7\"></script>",
+  "source_data": {
+    "width": 823,
+    "height": 716,
+    "background": {
+      "top": "#1a2f63",
+      "mid": "#0b1d46",
+      "bottom": "#071330"
+    },
+    "panel": {
+      "x": 0,
+      "y": 0,
+      "width": 823,
+      "height": 716
+    },
+    "title": {
+      "text": "U.S. Exports to Cuba Peak and\nFluctuate",
+      "x": 98,
+      "y": 97,
+      "fill": "#ffffff",
+      "fontSize": 40,
+      "lineHeight": 1.15,
+      "fontWeight": 700
+    },
+    "subtitle": {
+      "text": "\"U.S. exports to Cuba (in million U.S. dollars) from 2000 to 2019.\"",
+      "x": 98,
+      "y": 198,
+      "fill": "rgba(255,255,255,0.9)",
+      "fontSize": 22,
+      "fontWeight": 400
+    },
+    "plot": {
+      "x": 101,
+      "y": 293,
+      "width": 632,
+      "height": 349
+    },
+    "axis": {
+      "tickYears": [
+        2000,
+        2005,
+        2010,
+        2015,
+        2019
+      ],
+      "tickColor": "rgba(255,255,255,0.88)",
+      "tickFontSize": 24
+    },
+    "line": {
+      "stroke": "#3ea0ff",
+      "strokeWidth": 4,
+      "tension": 0.45
+    },
+    "area": {
+      "topColor": "rgba(76,164,255,0.58)",
+      "bottomColor": "rgba(31,90,170,0.06)"
+    },
+    "marker": {
+      "boxWidth": 56,
+      "boxHeight": 36,
+      "rx": 8,
+      "fill": "#3c9ef9",
+      "textColor": "#ffffff",
+      "fontSize": 24,
+      "fontWeight": 700,
+      "pointerWidth": 12,
+      "pointerHeight": 10,
+      "dy": 15
+    },
+    "data": [
+      {
+        "year": 2000,
+        "value": 65
+      },
+      {
+        "year": 2002,
+        "value": 95
+      },
+      {
+        "year": 2004,
+        "value": 125
+      },
+      {
+        "year": 2006,
+        "value": 155
+      },
+      {
+        "year": 2008,
+        "value": 185
+      },
+      {
+        "year": 2010,
+        "value": 140
+      },
+      {
+        "year": 2012,
+        "value": 80
+      },
+      {
+        "year": 2014,
+        "value": 30
+      },
+      {
+        "year": 2016,
+        "value": 60
+      },
+      {
+        "year": 2018,
+        "value": 90
+      },
+      {
+        "year": 2019,
+        "value": 105
+      }
+    ]
+  },
+  "render_script": [
+    "const container = d3.select('body').append('div').attr('id','chart');",
+    "",
+    "const svg = container",
+    "  .append('svg')",
+    "  .attr('width', source_data.width)",
+    "  .attr('height', source_data.height);",
+    "",
+    "const defs = svg.append('defs');",
+    "",
+    "const bgGrad = defs.append('linearGradient')",
+    "  .attr('id', 'bgGrad')",
+    "  .attr('x1', '0%').attr('y1', '0%')",
+    "  .attr('x2', '0%').attr('y2', '100%');",
+    "bgGrad.append('stop').attr('offset', '0%').attr('stop-color', source_data.background.top);",
+    "bgGrad.append('stop').attr('offset', '55%').attr('stop-color', source_data.background.mid);",
+    "bgGrad.append('stop').attr('offset', '100%').attr('stop-color', source_data.background.bottom);",
+    "",
+    "const areaGrad = defs.append('linearGradient')",
+    "  .attr('id', 'areaGrad')",
+    "  .attr('x1', '0%').attr('y1', '0%')",
+    "  .attr('x2', '0%').attr('y2', '100%');",
+    "areaGrad.append('stop').attr('offset', '0%').attr('stop-color', source_data.area.topColor);",
+    "areaGrad.append('stop').attr('offset', '100%').attr('stop-color', source_data.area.bottomColor);",
+    "",
+    "svg.append('rect')",
+    "  .attr('x', source_data.panel.x)",
+    "  .attr('y', source_data.panel.y)",
+    "  .attr('width', source_data.panel.width)",
+    "  .attr('height', source_data.panel.height)",
+    "  .attr('fill', 'url(#bgGrad)');",
+    "",
+    "const plot = source_data.plot;",
+    "const data = source_data.data;",
+    "",
+    "const x = d3.scaleLinear()",
+    "  .domain(d3.extent(data, d => d.year))",
+    "  .range([plot.x, plot.x + plot.width]);",
+    "",
+    "const y = d3.scaleLinear()",
+    "  .domain([0, d3.max(data, d => d.value) + 20])",
+    "  .range([plot.y + plot.height, plot.y]);",
+    "",
+    "const line = d3.line()",
+    "  .x(d => x(d.year))",
+    "  .y(d => y(d.value))",
+    "  .curve(d3.curveCatmullRom.alpha(source_data.line.tension));",
+    "",
+    "const area = d3.area()",
+    "  .x(d => x(d.year))",
+    "  .y0(plot.y + plot.height)",
+    "  .y1(d => y(d.value))",
+    "  .curve(d3.curveCatmullRom.alpha(source_data.line.tension));",
+    "",
+    "svg.append('path')",
+    "  .datum(data)",
+    "  .attr('d', area)",
+    "  .attr('fill', 'url(#areaGrad)');",
+    "",
+    "svg.append('path')",
+    "  .datum(data)",
+    "  .attr('d', line)",
+    "  .attr('fill', 'none')",
+    "  .attr('stroke', source_data.line.stroke)",
+    "  .attr('stroke-width', source_data.line.strokeWidth);",
+    "",
+    "svg.selectAll('.xTick')",
+    "  .data(source_data.axis.tickYears)",
+    "  .enter()",
+    "  .append('text')",
+    "  .attr('x', d => x(d))",
+    "  .attr('y', plot.y + plot.height + 42)",
+    "  .attr('text-anchor', 'middle')",
+    "  .attr('fill', source_data.axis.tickColor)",
+    "  .attr('font-size', source_data.axis.tickFontSize)",
+    "  .attr('font-family', 'sans-serif')",
+    "  .text(d => d);",
+    "",
+    "const labelGroup = svg.append('g');",
+    "",
+    "labelGroup.selectAll('.label')",
+    "  .data(data)",
+    "  .enter()",
+    "  .append('g')",
+    "  .attr('transform', d => `translate(${x(d.year)},${y(d.value) - source_data.marker.dy})`)",
+    "  .each(function(d) {",
+    "    const g = d3.select(this);",
+    "    const m = source_data.marker;",
+    "    const bw = m.boxWidth + (String(d.value).length - 2) * 10;",
+    "    const bh = m.boxHeight;",
+    "",
+    "    g.append('rect')",
+    "      .attr('x', -bw / 2)",
+    "      .attr('y', -bh)",
+    "      .attr('width', bw)",
+    "      .attr('height', bh)",
+    "      .attr('rx', m.rx)",
+    "      .attr('fill', m.fill);",
+    "",
+    "    g.append('path')",
+    "      .attr('d', `M ${-m.pointerWidth/2},0 L ${m.pointerWidth/2},0 L 0,${m.pointerHeight} Z`)",
+    "      .attr('fill', m.fill);",
+    "",
+    "    g.append('text')",
+    "      .attr('x', 0)",
+    "      .attr('y', -bh / 2 + 8)",
+    "      .attr('text-anchor', 'middle')",
+    "      .attr('fill', m.textColor)",
+    "      .attr('font-size', m.fontSize)",
+    "      .attr('font-weight', m.fontWeight)",
+    "      .attr('font-family', 'sans-serif')",
+    "      .text(d.value);",
+    "  });",
+    "",
+    "const titleLines = source_data.title.text.split('\\n');",
+    "titleLines.forEach((t, i) => {",
+    "  svg.append('text')",
+    "    .attr('x', source_data.title.x)",
+    "    .attr('y', source_data.title.y + i * source_data.title.fontSize * source_data.title.lineHeight)",
+    "    .attr('fill', source_data.title.fill)",
+    "    .attr('font-size', source_data.title.fontSize)",
+    "    .attr('font-weight', source_data.title.fontWeight)",
+    "    .attr('font-family', 'sans-serif')",
+    "    .text(t);",
+    "});",
+    "",
+    "svg.append('text')",
+    "  .attr('x', source_data.subtitle.x)",
+    "  .attr('y', source_data.subtitle.y)",
+    "  .attr('fill', source_data.subtitle.fill)",
+    "  .attr('font-size', source_data.subtitle.fontSize)",
+    "  .attr('font-family', 'sans-serif')",
+    "  .text(source_data.subtitle.text);"
+  ]
+}

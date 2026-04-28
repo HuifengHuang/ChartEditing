@@ -1,22 +1,28 @@
-import mirroredMoodPreset from "./preset_chart.json";
-import hospitalityRadarPreset from "./preset_chart_hospitality_radar.json";
+import mirroredMoodPreset from "./preset_chart_mirrored_bar.json";
 import brickFacadeRadarPreset from "./preset_chart_brick_facade_radar.json";
+import usExportsCubaPreset from "./preset_chart_us_exports_cuba.json";
+import appleSegmentsStackedPreset from "./preset_chart_apple_segments_stacked.json";
 
 export const presetCharts = [
   {
     id: "mirrored_mood",
-    label: "Patient Mood Scores",
+    label: "对称柱状图",
     data: mirroredMoodPreset,
   },
   {
-    id: "hospitality_radar",
-    label: "Hospitality Gender Radar",
-    data: hospitalityRadarPreset,
+    id: "brick_facade_radar",
+    label: "多数据雷达图",
+    data: brickFacadeRadarPreset,
   },
   {
-    id: "brick_facade_radar",
-    label: "Brick Facade Radar",
-    data: brickFacadeRadarPreset,
+    id: "us_exports_cuba",
+    label: "线图",
+    data: usExportsCubaPreset,
+  },
+  {
+    id: "apple_segments_stacked",
+    label: "堆叠图",
+    data: appleSegmentsStackedPreset,
   },
 ];
 
