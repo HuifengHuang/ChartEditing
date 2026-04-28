@@ -78,6 +78,7 @@ const llmResponseTick = ref(0);
 const chartRenderedTick = ref(0);
 const latestIntentGroups = ref([]);
 const toasts = ref([]);
+const showToastInUi = runtimeModeConfig.isDevelopment;
 const isPreviewVisible = ref(runtimeModeConfig.isDevelopment);
 const previewPlaceholderText = ref(runtimeModeConfig.isDevelopment ? "" : "No chart entered");
 let toastSeed = 0;
@@ -101,6 +102,9 @@ function handleFocusIntentGroup(payload) {
 }
 
 function pushToast(message, type = "info", timeoutMs = 2800) {
+  if (!showToastInUi) {
+    return;
+  }
   const text = String(message || "").trim();
   if (!text) {
     return;
@@ -571,7 +575,7 @@ async function handleImageUploaded(payload) {
       <h1>Chart Editing Workbench</h1>
     </header>
 
-    <div class="toast-layer" aria-live="polite">
+    <div v-if="showToastInUi" class="toast-layer" aria-live="polite">
       <div
         v-for="toast in toasts"
         :key="toast.id"

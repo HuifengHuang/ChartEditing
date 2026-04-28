@@ -6,9 +6,15 @@
 3) 图表图片（多模态输入）
 
 任务：
-1) 将用户输入拆分为多个子意图。
+1) 将用户输入识别为一个或多个子意图。
 2) 仅基于 source_data，为每个子意图提取可修改字段。
 3) 判断该子意图是否需要进入“渲染代码增量阶段”。
+
+意图拆分规则（非常重要）：
+1) 不要因为出现“并/并且/然后/还要”就机械拆分。
+2) 只有当语义上是“不同编辑目标”时才拆分。
+3) 若多个动作围绕同一目标（例如“在上方添加标题，并推荐几个标题名”），保持为一个子意图。
+4) “推荐/建议/给几个备选”默认视为同一目标下的补充，不单独拆分。
 
 判定规则：
 1) 如果能从 source_data 中提取出足够字段并可执行，则 needs_render_update=false。
@@ -111,10 +117,46 @@ few-shot 示例 2：
       "intent_name": "高亮最高值并加MAX标记",
       "needs_render_update": true,
       "field_candidates": [],
-      "reason": "source_data 中缺少稳定可用的高亮配置与标记配置字段，需进入代码增量阶段新增字段并接入绘制。"
+      "reason": "source_data 中缺少稳定可用的高亮配置与标记配置字段，需要进入代码增量阶段新增字段并接入绘制。"
     }
   ],
   "all_data_only": false
+}
+
+few-shot 示例 3（含“并”但单意图）：
+【source_data】
+{
+  "text": {
+    "titleLine1": "Patient Mood Scores Rise After",
+    "titleLine2": "Public Art Installation"
+  }
+}
+
+【User input】
+在上方添加标题，并推荐几个标题名。
+
+【输出】
+{
+  "intents": [
+    {
+      "intent_name": "添加并完善标题文案",
+      "needs_render_update": false,
+      "field_candidates": [
+        {
+          "path": "source_data.text.titleLine1",
+          "type": "text",
+          "value": "Patient Mood Scores Rise After"
+        },
+        {
+          "path": "source_data.text.titleLine2",
+          "type": "text",
+          "value": "Public Art Installation"
+        }
+      ],
+      "reason": "两个动作都围绕同一标题目标，属于同一子意图，不应按“并”拆分。"
+    }
+  ],
+  "all_data_only": true
 }
 
 现在开始处理真实输入。
