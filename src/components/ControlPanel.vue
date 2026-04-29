@@ -19,6 +19,7 @@ const props = defineProps({
     default: () => [],
   },
 });
+const emit = defineEmits(["remove-group"]);
 
 const selectedGroupId = ref("");
 const collapsedGroupIds = ref(new Set());
@@ -264,6 +265,14 @@ function isGroupSelected(groupId) {
   return selectedGroupId.value === groupId;
 }
 
+function onRemoveGroup(groupId) {
+  const normalizedGroupId = String(groupId || "").trim();
+  if (!normalizedGroupId) {
+    return;
+  }
+  emit("remove-group", { groupId: normalizedGroupId });
+}
+
 function toggleDetailSection(groupId, sectionId) {
   const meta = getMeta(groupId);
   if (!meta.sectionMap.has(sectionId)) {
@@ -353,13 +362,22 @@ defineExpose({
       >
         <header class="group-header">
           <h3>{{ group.label }}</h3>
-          <button
-            type="button"
-            class="group-toggle"
-            @click.stop="toggleGroupCollapsed(group.id)"
-          >
-            {{ isGroupCollapsed(group.id) ? "展开" : "折叠" }}
-          </button>
+          <div class="group-actions">
+            <button
+              type="button"
+              class="group-toggle"
+              @click.stop="toggleGroupCollapsed(group.id)"
+            >
+              {{ isGroupCollapsed(group.id) ? "Expand" : "Collapse" }}
+            </button>
+            <button
+              type="button"
+              class="group-delete"
+              @click.stop="onRemoveGroup(group.id)"
+            >
+              Delete
+            </button>
+          </div>
         </header>
 
         <div v-if="hasValidationIssue(group.id)" class="fallback-warning">
@@ -484,11 +502,27 @@ defineExpose({
   color: #0f172a;
 }
 
+.group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .group-toggle {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #f8fafc;
   color: #334155;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.group-delete {
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #b91c1c;
   font-size: 12px;
   padding: 4px 10px;
   cursor: pointer;

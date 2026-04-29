@@ -134,6 +134,19 @@ function handleFocusIntentGroup(payload) {
   }
 }
 
+function handleRemovePanelGroup(payload) {
+  const groupId = String(payload?.groupId || "").trim();
+  if (!groupId) {
+    return;
+  }
+  const nextGroups = panelGroups.value.filter((group) => String(group?.id || "") !== groupId);
+  panelGroups.value = nextGroups;
+  if (!nextGroups.length) {
+    panelSpec.value = createEmptyPanelSpec();
+  }
+  pushToast("Panel group deleted.", "info");
+}
+
 function pushToast(message, type = "info", timeoutMs = 2800) {
   if (!showToastInUi) {
     return;
@@ -657,6 +670,7 @@ async function handleImageUploaded(payload) {
           :parts="parts"
           :panel-spec="panelSpec"
           :panel-groups="panelGroups"
+          @remove-group="handleRemovePanelGroup"
         />
       </div>
     </section>
