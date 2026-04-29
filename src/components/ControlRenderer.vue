@@ -484,6 +484,18 @@ function isArrayCell(row, column) {
   return Array.isArray(row?.[column?.key]) || isArrayColumn(column);
 }
 
+function hasMultilineText(value) {
+  return typeof value === "string" && (value.includes("\n") || value.includes("\\n"));
+}
+
+const shouldUseMultilineSingleText = computed(() => {
+  if (props.control.controlType !== "text") {
+    return false;
+  }
+  const value = singleDraftEditing.value ? singleDraftValue.value : currentSingleValue.value;
+  return hasMultilineText(value ?? "");
+});
+
 function formatArrayPreview(value) {
   if (!Array.isArray(value)) {
     return "";
@@ -744,6 +756,19 @@ function getTableCellDisplayValue(rowIndex, column, row) {
   return row?.[column.key] ?? "";
 }
 
+function shouldUseMultilineTableCell(rowIndex, column, row) {
+  if (column?.valueType === "color") {
+    return false;
+  }
+  const value = getTableCellDisplayValue(rowIndex, column, row);
+  return hasMultilineText(value ?? "");
+}
+
+function shouldUseMultilineArrayItem(rowIndex, columnKey, itemIndex, fallbackValue) {
+  const value = getArrayItemDisplayValue(rowIndex, columnKey, itemIndex, fallbackValue);
+  return hasMultilineText(value ?? "");
+}
+
 function onTableCellDraftInput(rowIndex, column, rawValue) {
   const key = getTableCellDraftKey(rowIndex, column.key);
   tableCellDraftMap.value = {
@@ -977,14 +1002,26 @@ function isNumberLikeColumn(column) {
         <span>{{ Number(currentSingleValue).toFixed(2) }}</span>
       </div>
 
-      <input
+      <template
         v-else-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'text'"
-        type="text"
-        :value="singleDraftValue"
-        @input="onSingleDraftInput"
-        @blur="onSingleDraftBlur"
-        @keydown.enter="onSingleDraftEnter"
-      />
+      >
+        <textarea
+          v-if="shouldUseMultilineSingleText"
+          class="multiline-input"
+          :value="singleDraftValue"
+          rows="3"
+          @input="onSingleDraftInput"
+          @blur="onSingleDraftBlur"
+        />
+        <input
+          v-else
+          type="text"
+          :value="singleDraftValue"
+          @input="onSingleDraftInput"
+          @blur="onSingleDraftBlur"
+          @keydown.enter="onSingleDraftEnter"
+        />
+      </template>
 
       <input
         v-else-if="control.operationType === 'update' && control.bindingMode === 'single' && control.controlType === 'color'"
@@ -1165,14 +1202,24 @@ function isNumberLikeColumn(column) {
                 >
                   {{ formatArrayPreview(row?.[column.key]) || "[]" }}
                 </button>
-                <input
-                  v-else-if="column.editable !== false"
-                  :type="column.valueType === 'color' ? 'color' : 'text'"
-                  :value="getTableCellDisplayValue(rowIndex, column, row)"
-                  @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
-                  @blur="onTableCellBlur(rowIndex, column, $event)"
-                  @keydown.enter="onTableCellEnter"
-                />
+                <template v-else-if="column.editable !== false">
+                  <textarea
+                    v-if="shouldUseMultilineTableCell(rowIndex, column, row)"
+                    class="multiline-input table-textarea"
+                    rows="2"
+                    :value="getTableCellDisplayValue(rowIndex, column, row)"
+                    @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                    @blur="onTableCellBlur(rowIndex, column, $event)"
+                  />
+                  <input
+                    v-else
+                    :type="column.valueType === 'color' ? 'color' : 'text'"
+                    :value="getTableCellDisplayValue(rowIndex, column, row)"
+                    @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                    @blur="onTableCellBlur(rowIndex, column, $event)"
+                    @keydown.enter="onTableCellEnter"
+                  />
+                </template>
                 <span v-else>{{ formatReadonlyValue(row?.[column.key]) }}</span>
               </td>
               <td v-if="isRowActionEnabled('remove')">
@@ -1245,14 +1292,24 @@ function isNumberLikeColumn(column) {
                 >
                   {{ formatArrayPreview(row?.[column.key]) || "[]" }}
                 </button>
-                <input
-                  v-else-if="column.editable !== false"
-                  :type="column.valueType === 'color' ? 'color' : 'text'"
-                  :value="getTableCellDisplayValue(rowIndex, column, row)"
-                  @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
-                  @blur="onTableCellBlur(rowIndex, column, $event)"
-                  @keydown.enter="onTableCellEnter"
-                />
+                <template v-else-if="column.editable !== false">
+                  <textarea
+                    v-if="shouldUseMultilineTableCell(rowIndex, column, row)"
+                    class="multiline-input table-textarea"
+                    rows="2"
+                    :value="getTableCellDisplayValue(rowIndex, column, row)"
+                    @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                    @blur="onTableCellBlur(rowIndex, column, $event)"
+                  />
+                  <input
+                    v-else
+                    :type="column.valueType === 'color' ? 'color' : 'text'"
+                    :value="getTableCellDisplayValue(rowIndex, column, row)"
+                    @input="onTableCellDraftInput(rowIndex, column, $event.target.value)"
+                    @blur="onTableCellBlur(rowIndex, column, $event)"
+                    @keydown.enter="onTableCellEnter"
+                  />
+                </template>
                 <span v-else>{{ formatReadonlyValue(row?.[column.key]) }}</span>
               </td>
             </tr>
@@ -1349,36 +1406,75 @@ function isNumberLikeColumn(column) {
                 <span>{{ Boolean(item.value) ? "On" : "Off" }}</span>
               </label>
 
-              <input
-                v-else
-                type="text"
-                :value="
-                  getArrayItemDisplayValue(
-                    activeArrayEditor.rowIndex,
-                    activeArrayEditor.columnKey,
-                    item.index,
-                    item.value
-                  )
-                "
-                @input="
-                  onArrayItemDraftInput(
-                    activeArrayEditor.rowIndex,
-                    activeArrayEditor.columnKey,
-                    item.index,
-                    $event.target.value
-                  )
-                "
-                @blur="
-                  onArrayItemBlur(
-                    activeArrayEditor.rowIndex,
-                    activeArrayEditor.columnKey,
-                    item.index,
-                    item.valueType,
-                    $event
-                  )
-                "
-                @keydown.enter="onArrayItemEnter"
-              />
+              <template v-else>
+                <textarea
+                  v-if="
+                    shouldUseMultilineArrayItem(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      item.value
+                    )
+                  "
+                  class="multiline-input"
+                  rows="2"
+                  :value="
+                    getArrayItemDisplayValue(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      item.value
+                    )
+                  "
+                  @input="
+                    onArrayItemDraftInput(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      $event.target.value
+                    )
+                  "
+                  @blur="
+                    onArrayItemBlur(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      item.valueType,
+                      $event
+                    )
+                  "
+                />
+                <input
+                  v-else
+                  type="text"
+                  :value="
+                    getArrayItemDisplayValue(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      item.value
+                    )
+                  "
+                  @input="
+                    onArrayItemDraftInput(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      $event.target.value
+                    )
+                  "
+                  @blur="
+                    onArrayItemBlur(
+                      activeArrayEditor.rowIndex,
+                      activeArrayEditor.columnKey,
+                      item.index,
+                      item.valueType,
+                      $event
+                    )
+                  "
+                  @keydown.enter="onArrayItemEnter"
+                />
+              </template>
             </div>
           </div>
         </div>
@@ -1462,6 +1558,21 @@ select {
   padding: 7px 8px;
   font-size: 13px;
   background: #ffffff;
+}
+
+textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 13px;
+  background: #ffffff;
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.multiline-input {
+  min-height: 68px;
 }
 
 .number-input-wrap {
@@ -1632,6 +1743,15 @@ td {
 td input {
   font-size: 12px;
   padding: 6px;
+}
+
+td textarea {
+  font-size: 12px;
+  padding: 6px;
+}
+
+.table-textarea {
+  min-height: 52px;
 }
 
 .table-number-wrap {
