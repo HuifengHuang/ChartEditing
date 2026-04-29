@@ -3,7 +3,7 @@ import { computed, nextTick, ref, toRaw } from "vue";
 import UserInput from "./components/CodePanel.vue";
 import ChartPreview from "./components/ChartPreview.vue";
 import ControlPanel from "./components/ControlPanel.vue";
-import { defaultPresetId, presetCharts, resolvePresetById } from "./data/presetCharts.js";
+import { defaultPresetId, resolvePresetById } from "./data/presetCharts.js";
 import { samplePanelSpecMirroredMood } from "./specs/samplePanelSpecMirroredMood";
 import { buildChartHtml } from "./utils/buildChartHtml";
 import { intentToUpdatePlan } from "./utils/intentToUpdatePlan";
@@ -66,16 +66,13 @@ function safeDeepClone(value, fallback = {}) {
 
 const parts = ref(
   runtimeModeConfig.isDevelopment
-    ? createChartPartsFromPresetChart(resolvePresetById(defaultPresetId)?.data)
+    ? createChartPartsFromPresetChart(
+        resolvePresetById(runtimeModeConfig.developmentPresetId || defaultPresetId)?.data
+      )
     : createEmptyChartParts()
 );
 const panelSpec = ref(createEmptyPanelSpec());
 const panelGroups = ref([]);
-const selectedPresetId = ref(defaultPresetId);
-const presetOptions = presetCharts.map((item) => ({
-  id: item.id,
-  label: item.label,
-}));
 const chartPreviewRef = ref(null);
 const controlPanelRef = ref(null);
 
@@ -101,7 +98,6 @@ function applyPresetById(presetId) {
   if (!matchedPreset) {
     return;
   }
-  selectedPresetId.value = matchedPreset.id;
   parts.value = createChartPartsFromPresetChart(matchedPreset.data);
   panelSpec.value = createEmptyPanelSpec();
   panelGroups.value = [];
@@ -110,17 +106,6 @@ function applyPresetById(presetId) {
   previewPlaceholderText.value = "";
   llmResponseTick.value += 1;
   pushToast(`Preset switched to "${matchedPreset.label}".`, "info");
-}
-
-function handlePresetChanged(payload) {
-  if (!runtimeModeConfig.isDevelopment || busy.value) {
-    return;
-  }
-  const nextPresetId = String(payload?.presetId || "").trim();
-  if (!nextPresetId || nextPresetId === selectedPresetId.value) {
-    return;
-  }
-  applyPresetById(nextPresetId);
 }
 
 function handleFocusIntentGroup(payload) {
@@ -587,7 +572,11 @@ async function handleImageUploaded(payload) {
   }
 
   if (runtimeModeConfig.isDevelopment) {
-    applyPresetById(selectedPresetId.value);
+    // 开发模式下也强制触发一次预览重渲染，避免同一 preset 时不触发 iframe load。
+    isPreviewVisible.value = false;
+    previewPlaceholderText.value = "Rebuilding chart...";
+    await nextTick();
+    applyPresetById(runtimeModeConfig.developmentPresetId || defaultPresetId);
     pushToast("Development mode: loaded selected preset without LLM call.", "info");
     return;
   }
@@ -640,9 +629,6 @@ async function handleImageUploaded(payload) {
       <div class="left-column">
         <UserInput
           :busy="busy"
-          :is-development="runtimeModeConfig.isDevelopment"
-          :preset-options="presetOptions"
-          :selected-preset-id="selectedPresetId"
           :llm-response-tick="llmResponseTick"
           :chart-rendered-tick="chartRenderedTick"
           :is-chart-visible="isPreviewVisible"
@@ -650,7 +636,6 @@ async function handleImageUploaded(payload) {
           @submit-prompt="handlePromptSubmit"
           @image-uploaded="handleImageUploaded"
           @focus-intent-group="handleFocusIntentGroup"
-          @preset-changed="handlePresetChanged"
         />
       </div>
 

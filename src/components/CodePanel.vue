@@ -8,18 +8,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  isDevelopment: {
-    type: Boolean,
-    default: false,
-  },
-  presetOptions: {
-    type: Array,
-    default: () => [],
-  },
-  selectedPresetId: {
-    type: String,
-    default: "",
-  },
   llmResponseTick: {
     type: Number,
     default: 0,
@@ -38,7 +26,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["submit-prompt", "image-uploaded", "focus-intent-group", "preset-changed"]);
+const emit = defineEmits(["submit-prompt", "image-uploaded", "focus-intent-group"]);
 
 const chatInput = ref("");
 const imageFileInputRef = ref(null);
@@ -211,14 +199,6 @@ function triggerImagePicker() {
   imageFileInputRef.value.click();
 }
 
-function onPresetSelectionChange(event) {
-  const presetId = String(event?.target?.value || "").trim();
-  if (!presetId || props.busy) {
-    return;
-  }
-  emit("preset-changed", { presetId });
-}
-
 function onImageSelected(event) {
   const file = event?.target?.files?.[0];
   if (!file) {
@@ -316,25 +296,6 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="chart-input-wrap">
-          <div v-if="isDevelopment && presetOptions.length" class="preset-select-row">
-            <label for="preset-select">Preset</label>
-            <select
-              id="preset-select"
-              class="preset-select"
-              :value="selectedPresetId"
-              :disabled="busy"
-              @change="onPresetSelectionChange"
-            >
-              <option
-                v-for="item in presetOptions"
-                :key="item.id"
-                :value="item.id"
-              >
-                {{ item.label }}
-              </option>
-            </select>
-          </div>
-
           <div class="image-upload-row">
             <input
               ref="imageFileInputRef"
@@ -347,9 +308,9 @@ onBeforeUnmount(() => {
             <button type="button" class="upload-btn" :disabled="busy" @click="triggerImagePicker">
               {{ uploadedImageDataUrl ? "Re-upload" : "Choose File" }}
             </button>
+            <span v-if="uploadedImageName" class="image-name-inline">{{ uploadedImageName }}</span>
           </div>
 
-          <div v-if="uploadedImageName" class="image-name">{{ uploadedImageName }}</div>
           <div v-if="imageUploadError" class="image-error">{{ imageUploadError }}</div>
 
           <div v-if="!uploadedImageDataUrl" class="image-empty">
@@ -489,6 +450,17 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
+.image-name-inline {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 60%;
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .image-file-input {
   display: none;
 }
@@ -505,11 +477,6 @@ onBeforeUnmount(() => {
 .upload-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.image-name {
-  font-size: 12px;
-  color: #475569;
 }
 
 .image-error {
@@ -596,27 +563,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.preset-select-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-  align-items: center;
-}
-
-.preset-select-row label {
-  font-size: 12px;
-  color: #334155;
-}
-
-.preset-select {
-  width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  padding: 6px 8px;
-  font-size: 12px;
 }
 
 .intent-link-btn {

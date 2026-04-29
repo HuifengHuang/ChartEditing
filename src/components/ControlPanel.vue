@@ -515,6 +515,8 @@ defineExpose({
   color: #334155;
   font-size: 12px;
   padding: 4px 10px;
+  width: 70px;
+  text-align: center;
   cursor: pointer;
 }
 
