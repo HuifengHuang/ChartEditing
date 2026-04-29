@@ -45,7 +45,8 @@
       "dotRadius": 5,
       "fontSize": 14,
       "fontWeight": 700,
-      "fill": "#f4f4f4"
+      "fill": "#f4f4f4",
+      "rowMaximum": 4
     },
     "radar": {
       "centerX": 429,
@@ -241,8 +242,8 @@
     "    .attr(\"transform\", `translate(${legend.x}, ${legend.y})`);",
     "",
     "  config.series.forEach((d, i) => {",
-    "    const col = i % 4;",
-    "    const row = Math.floor(i / 4);",
+    "    const col = i % legend.rowMaximum;",
+    "    const row = Math.floor(i / legend.rowMaximum);",
     "",
     "    const g = items.append(\"g\")",
     "      .attr(\"transform\", `translate(${col * legend.itemGapX}, ${row * legend.itemGapY})`);",

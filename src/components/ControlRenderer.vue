@@ -480,6 +480,10 @@ function isArrayColumn(column) {
   return String(column?.valueType || "").toLowerCase() === "array";
 }
 
+function isArrayCell(row, column) {
+  return Array.isArray(row?.[column?.key]) || isArrayColumn(column);
+}
+
 function formatArrayPreview(value) {
   if (!Array.isArray(value)) {
     return "";
@@ -1154,7 +1158,7 @@ function isNumberLikeColumn(column) {
                   </div>
                 </div>
                 <button
-                  v-else-if="isArrayColumn(column)"
+                  v-else-if="isArrayCell(row, column)"
                   type="button"
                   class="array-cell-btn"
                   @click="onArrayCellClick(rowIndex, column, row)"
@@ -1234,7 +1238,7 @@ function isNumberLikeColumn(column) {
                   </div>
                 </div>
                 <button
-                  v-else-if="isArrayColumn(column)"
+                  v-else-if="isArrayCell(row, column)"
                   type="button"
                   class="array-cell-btn"
                   @click="onArrayCellClick(rowIndex, column, row)"
