@@ -28,7 +28,8 @@ except Exception:
 
 
 DEFAULT_API_URL = "https://api.shunyu.tech/v1/chat/completions"
-FIXED_MODEL = "gpt-5.3-codex"
+FIXED_MODEL = "gpt-5.3-codex"       
+# gpt-5.3-codex     qwen3-vl-plus
 
 
 def now_iso_utc() -> str:

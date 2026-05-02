@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Unaudited Apple Inc. Revenue by Operating Segments</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+<body>
+  <script>
+      const source_data = {
+  "width": 823,
+  "height": 716,
+  "container": {
+    "selector": "#chart",
+    "background": "#ffffff"
+  },
+  "chart": {
+    "background": "#ffffff",
+    "margin": {
+      "top": 96,
+      "right": 36,
+      "bottom": 68,
+      "left": 64
+    }
+  },
+  "title": {
+    "text": "Unaudited Apple Inc. Revenue by Operating Segments",
+    "x": 0.5,
+    "y": 28,
+    "color": "#5f6f82",
+    "fontSize": 29,
+    "fontWeight": 500,
+    "fontFamily": "Arial, sans-serif"
+  },
+  "legend": {
+    "x": 0.5,
+    "y": 62,
+    "itemGap": 18,
+    "swatchW": 16,
+    "swatchH": 16,
+    "textDx": 6,
+    "fontSize": 16,
+    "color": "#5f6f82",
+    "fontFamily": "Arial, sans-serif"
+  },
+  "axes": {
+    "x": {
+      "tickSize": 6,
+      "tickColor": "#b8b8b8",
+      "tickLabelColor": "#5f6f82",
+      "tickLabelSize": 17,
+      "baselineColor": "#b8b8b8",
+      "baselineWidth": 1.2
+    },
+    "y": {
+      "domain": [
+        0,
+        90
+      ],
+      "ticks": [
+        0,
+        30,
+        60,
+        90
+      ],
+      "tickSize": 6,
+      "tickColor": "#b8b8b8",
+      "tickLabelColor": "#5f6f82",
+      "tickLabelSize": 17,
+      "baselineColor": "#b8b8b8",
+      "baselineWidth": 1.2,
+      "label": "Revenue (in Billions USD)",
+      "labelColor": "#3f4f5f",
+      "labelSize": 21,
+      "labelOffset": 38
+    }
+  },
+  "stack": {
+    "order": [
+      "Rest of Asia Pacific",
+      "Japan",
+      "Greater China",
+      "Europe",
+      "Americas"
+    ],
+    "stroke": "#ffffff",
+    "strokeWidth": 3
+  },
+  "series": [
+    {
+      "key": "Americas",
+      "color": "#77B5E5"
+    },
+    {
+      "key": "Europe",
+      "color": "#4C8CCF"
+    },
+    {
+      "key": "Greater China",
+      "color": "#EE8934"
+    },
+    {
+      "key": "Japan",
+      "color": "#F2CC5B"
+    },
+    {
+      "key": "Rest of Asia Pacific",
+      "color": "#6D7C84"
+    }
+  ],
+  "data": [
+    {
+      "quarter": "Q2 2014",
+      "Americas": 17.5,
+      "Europe": 11,
+      "Greater China": 9.5,
+      "Japan": 4,
+      "Rest of Asia Pacific": 3
+    },
+    {
+      "quarter": "Q3 2014",
+      "Americas": 17,
+      "Europe": 8.8,
+      "Greater China": 6,
+      "Japan": 2.9,
+      "Rest of Asia Pacific": 2.8
+    },
+    {
+      "quarter": "Q4 2014",
+      "Americas": 19.8,
+      "Europe": 10.4,
+      "Greater China": 6.3,
+      "Japan": 3.1,
+      "Rest of Asia Pacific": 2.9
+    },
+    {
+      "quarter": "Q1 2015",
+      "Americas": 29.8,
+      "Europe": 17.4,
+      "Greater China": 16,
+      "Japan": 5.4,
+      "Rest of Asia Pacific": 5.3
+    },
+    {
+      "quarter": "Q2 2015",
+      "Americas": 21.4,
+      "Europe": 13.1,
+      "Greater China": 15.8,
+      "Japan": 3.9,
+      "Rest of Asia Pacific": 4.2
+    },
+    {
+      "quarter": "Q3 2015",
+      "Americas": 20,
+      "Europe": 10.5,
+      "Greater China": 12.8,
+      "Japan": 2.9,
+      "Rest of Asia Pacific": 3.5
+    },
+    {
+      "quarter": "Q4 2015",
+      "Americas": 21.4,
+      "Europe": 10.7,
+      "Greater China": 12.7,
+      "Japan": 3.6,
+      "Rest of Asia Pacific": 3.2
+    },
+    {
+      "quarter": "Q1 2016",
+      "Americas": 28.7,
+      "Europe": 18,
+      "Greater China": 18.9,
+      "Japan": 4.9,
+      "Rest of Asia Pacific": 5.4
+    }
+  ]
+};
+      const existing = document.querySelector(source_data.container.selector);
+const container = existing || (() => {
+  const div = document.createElement('div');
+  if (source_data.container.selector.startsWith('#')) {
+    div.id = source_data.container.selector.slice(1);
+  }
+  document.body.appendChild(div);
+  return div;
+})();
+
+const w = source_data.width;
+const h = source_data.height;
+const m = source_data.chart.margin;
+const innerW = w - m.left - m.right;
+const innerH = h - m.top - m.bottom;
+
+d3.select(container)
+  .style('width', w + 'px')
+  .style('height', h + 'px')
+  .style('background', source_data.container.background)
+  .style('margin', '0');
+
+const svg = d3.select(container)
+  .append('svg')
+  .attr('width', w)
+  .attr('height', h)
+  .style('display', 'block')
+  .style('background', source_data.chart.background);
+
+svg.append('text')
+  .attr('x', w * source_data.title.x)
+  .attr('y', source_data.title.y)
+  .attr('text-anchor', 'middle')
+  .style('fill', source_data.title.color)
+  .style('font-size', source_data.title.fontSize + 'px')
+  .style('font-weight', source_data.title.fontWeight)
+  .style('font-family', source_data.title.fontFamily)
+  .text(source_data.title.text);
+
+const legendGroup = svg.append('g')
+  .attr('transform', `translate(${w * source_data.legend.x}, ${source_data.legend.y})`);
+
+const legendItems = legendGroup.selectAll('g')
+  .data(source_data.series)
+  .join('g');
+
+legendItems.append('rect')
+  .attr('width', source_data.legend.swatchW)
+  .attr('height', source_data.legend.swatchH)
+  .attr('y', -source_data.legend.swatchH + 2)
+  .attr('fill', d => d.color);
+
+legendItems.append('text')
+  .attr('x', source_data.legend.swatchW + source_data.legend.textDx)
+  .attr('y', 0)
+  .attr('dominant-baseline', 'ideographic')
+  .style('font-size', source_data.legend.fontSize + 'px')
+  .style('font-family', source_data.legend.fontFamily)
+  .style('fill', source_data.legend.color)
+  .text(d => d.key);
+
+let accX = 0;
+legendItems.each(function(_, i) {
+  const gItem = d3.select(this);
+  gItem.attr('transform', `translate(${accX}, 0)`);
+  const box = this.getBBox();
+  accX += box.width + source_data.legend.itemGap;
+});
+legendGroup.attr('transform', `translate(${(w - (accX - source_data.legend.itemGap)) / 2}, ${source_data.legend.y})`);
+
+const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+
+const x = d3.scalePoint()
+  .domain(source_data.data.map(d => d.quarter))
+  .range([0, innerW])
+  .padding(0.2);
+
+const y = d3.scaleLinear()
+  .domain(source_data.axes.y.domain)
+  .range([innerH, 0]);
+
+const stack = d3.stack().keys(source_data.stack.order);
+const stacked = stack(source_data.data);
+
+const color = new Map(source_data.series.map(d => [d.key, d.color]));
+
+const area = d3.area()
+  .x(d => x(d.data.quarter))
+  .y0(d => y(d[0]))
+  .y1(d => y(d[1]))
+  .curve(d3.curveLinear);
+
+g.selectAll('.layer')
+  .data(stacked)
+  .join('path')
+  .attr('class', 'layer')
+  .attr('d', area)
+  .attr('fill', d => color.get(d.key))
+  .attr('stroke', source_data.stack.stroke)
+  .attr('stroke-width', source_data.stack.strokeWidth);
+
+const xAxis = d3.axisBottom(x)
+  .tickSize(source_data.axes.x.tickSize)
+  .tickPadding(8);
+
+const gx = g.append('g')
+  .attr('transform', `translate(0,${innerH})`)
+  .call(xAxis);
+
+gx.selectAll('text')
+  .style('fill', source_data.axes.x.tickLabelColor)
+  .style('font-size', source_data.axes.x.tickLabelSize + 'px')
+  .style('font-family', 'Arial, sans-serif');
+
+gx.selectAll('line')
+  .style('stroke', source_data.axes.x.tickColor)
+  .style('stroke-width', 1);
+
+gx.select('.domain')
+  .style('stroke', source_data.axes.x.baselineColor)
+  .style('stroke-width', source_data.axes.x.baselineWidth);
+
+const yAxis = d3.axisLeft(y)
+  .tickValues(source_data.axes.y.ticks)
+  .tickSize(source_data.axes.y.tickSize)
+  .tickPadding(8);
+
+const gy = g.append('g').call(yAxis);
+
+gy.selectAll('text')
+  .style('fill', source_data.axes.y.tickLabelColor)
+  .style('font-size', source_data.axes.y.tickLabelSize + 'px')
+  .style('font-family', 'Arial, sans-serif');
+
+gy.selectAll('line')
+  .style('stroke', source_data.axes.y.tickColor)
+  .style('stroke-width', 1);
+
+gy.select('.domain')
+  .style('stroke', source_data.axes.y.baselineColor)
+  .style('stroke-width', source_data.axes.y.baselineWidth);
+
+g.append('text')
+  .attr('transform', 'rotate(-90)')
+  .attr('x', -innerH / 2)
+  .attr('y', -source_data.axes.y.labelOffset)
+  .attr('text-anchor', 'middle')
+  .style('fill', source_data.axes.y.labelColor)
+  .style('font-size', source_data.axes.y.labelSize + 'px')
+  .style('font-family', 'Arial, sans-serif')
+  .text(source_data.axes.y.label);
+  </script>
+</body>
+</html>
