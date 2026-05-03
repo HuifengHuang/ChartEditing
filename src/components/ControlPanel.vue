@@ -24,6 +24,7 @@ const emit = defineEmits(["remove-group"]);
 const selectedGroupId = ref("");
 const collapsedGroupIds = ref(new Set());
 const expandedDetailByGroup = ref(new Map());
+const selectedPresetIdByGroup = ref(new Map());
 const panelRootRef = ref(null);
 
 function normalizePanelSpec(value) {
@@ -116,7 +117,17 @@ const normalizedPanelGroups = computed(() => {
       const id = String(group.id || `panel_group_${index + 1}`);
       const label = String(group.label || `Intent ${index + 1}`);
       const panelSpec = normalizePanelSpec(group.panelSpec);
-      return { id, label, panelSpec };
+      const designPresets = Array.isArray(group.designPresets)
+        ? group.designPresets
+            .map((preset, presetIndex) => ({
+              id: String(preset?.id || `design_preset_${presetIndex + 1}`),
+              label: String(preset?.label || `Preset ${presetIndex + 1}`),
+              patch: preset?.patch && typeof preset.patch === "object" ? preset.patch : {},
+              thumbnailDataUrl: String(preset?.thumbnailDataUrl || ""),
+            }))
+            .filter((preset) => Object.keys(preset.patch).length > 0)
+        : [];
+      return { id, label, panelSpec, designPresets };
     });
 });
 
@@ -157,6 +168,7 @@ watch(
       selectedGroupId.value = "";
       collapsedGroupIds.value = new Set();
       expandedDetailByGroup.value = new Map();
+      selectedPresetIdByGroup.value = new Map();
       return;
     }
 
@@ -173,19 +185,29 @@ watch(
     collapsedGroupIds.value = nextCollapsed;
 
     const nextExpandedDetailByGroup = new Map();
+    const nextSelectedPresetMap = new Map();
     groups.forEach((group) => {
       const cached = expandedDetailByGroup.value.get(group.id);
       if (cached instanceof Set) {
         nextExpandedDetailByGroup.set(group.id, new Set(cached));
-        return;
+      } else {
+        const sectionMap = buildSectionMap(group.panelSpec);
+        nextExpandedDetailByGroup.set(
+          group.id,
+          buildDefaultExpandedDetailSet(group.panelSpec, sectionMap)
+        );
       }
-      const sectionMap = buildSectionMap(group.panelSpec);
-      nextExpandedDetailByGroup.set(
-        group.id,
-        buildDefaultExpandedDetailSet(group.panelSpec, sectionMap)
-      );
+
+      const currentPresetId = selectedPresetIdByGroup.value.get(group.id);
+      const hasCurrentPreset = group.designPresets.some((preset) => preset.id === currentPresetId);
+      if (hasCurrentPreset) {
+        nextSelectedPresetMap.set(group.id, currentPresetId);
+      } else if (group.designPresets.length) {
+        nextSelectedPresetMap.set(group.id, group.designPresets[0].id);
+      }
     });
     expandedDetailByGroup.value = nextExpandedDetailByGroup;
+    selectedPresetIdByGroup.value = nextSelectedPresetMap;
   },
   { immediate: true }
 );
@@ -265,6 +287,10 @@ function isGroupSelected(groupId) {
   return selectedGroupId.value === groupId;
 }
 
+function isDesignPresetSelected(groupId, presetId) {
+  return selectedPresetIdByGroup.value.get(groupId) === presetId;
+}
+
 function onRemoveGroup(groupId) {
   const normalizedGroupId = String(groupId || "").trim();
   if (!normalizedGroupId) {
@@ -299,6 +325,17 @@ function applyPatch(patch) {
   Object.entries(patch).forEach(([path, value]) => {
     setValueByPath(props.parts, path, value);
   });
+}
+
+function applyDesignPreset(groupId, preset) {
+  if (!preset?.patch || typeof preset.patch !== "object") {
+    return;
+  }
+  selectedGroupId.value = String(groupId || "");
+  applyPatch(preset.patch);
+  const nextMap = new Map(selectedPresetIdByGroup.value);
+  nextMap.set(groupId, preset.id);
+  selectedPresetIdByGroup.value = nextMap;
 }
 
 function onAddItem(payload) {
@@ -385,6 +422,33 @@ defineExpose({
         </div>
 
         <div v-if="!isGroupCollapsed(group.id)" class="group-body">
+          <section v-if="group.designPresets.length" class="design-presets-section">
+            <header class="section-header">
+              <h4>Design Presets</h4>
+            </header>
+            <div class="design-preset-grid">
+              <button
+                v-for="preset in group.designPresets"
+                :key="`${group.id}_${preset.id}`"
+                type="button"
+                class="design-preset-card"
+                :class="{ active: isDesignPresetSelected(group.id, preset.id) }"
+                @click.stop="applyDesignPreset(group.id, preset)"
+              >
+                <div class="design-preset-thumb-wrap">
+                  <img
+                    v-if="preset.thumbnailDataUrl"
+                    class="design-preset-thumb"
+                    :src="preset.thumbnailDataUrl"
+                    :alt="preset.label"
+                  />
+                  <div v-else class="design-preset-thumb-fallback">No Preview</div>
+                </div>
+                <span class="design-preset-label">{{ preset.label }}</span>
+              </button>
+            </div>
+          </section>
+
           <section
             v-for="block in getRenderSectionBlocks(group)"
             :key="`${group.id}_${block.section.sectionId}`"
@@ -535,6 +599,71 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.design-presets-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.design-preset-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.design-preset-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.design-preset-card.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.design-preset-thumb-wrap {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border: 1px solid #dbe3ef;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.design-preset-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.design-preset-thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.design-preset-label {
+  font-size: 11px;
+  color: #1e293b;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fallback-warning {

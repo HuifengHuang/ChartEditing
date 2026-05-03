@@ -17,6 +17,9 @@ import { generateChartHtmlFromImage } from "./llm/chartCodeGeneratorLLM.js";
 import { htmlToChartParts } from "./utils/htmlToChartParts.js";
 import { buildRecommendationPanelPlan } from "./utils/recommendationPanelPlan.js";
 import { applyIncrementalRenderUpdate } from "./utils/applyIncrementalRenderUpdate.js";
+import { extractDesignPresetsFromRecommendation } from "./utils/designPresetUtils.js";
+import { generateChartThumbnailFromHtml } from "./utils/chartThumbnailGenerator.js";
+import { setValueByPath } from "./utils/pathUtils.js";
 
 function createEmptyChartParts() {
   return {
@@ -227,6 +230,44 @@ function buildPanelGroupLabel({ intent, recommendationJson, panelJson, index }) 
     return fromTask;
   }
   return `Intent ${index + 1}`;
+}
+
+function applyDesignPresetPatchToParts(baseParts, patch) {
+  const nextParts = safeDeepClone(baseParts, createEmptyChartParts());
+  if (!patch || typeof patch !== "object") {
+    return nextParts;
+  }
+  Object.entries(patch).forEach(([path, value]) => {
+    setValueByPath(nextParts, path, safeDeepClone(value, value));
+  });
+  return nextParts;
+}
+
+async function buildDesignPresetThumbnails({ recommendationJson, baseParts }) {
+  const presets = extractDesignPresetsFromRecommendation(recommendationJson, 3);
+  if (!presets.length) {
+    return [];
+  }
+
+  const designPresets = [];
+  for (const preset of presets) {
+    let thumbnailDataUrl = "";
+    try {
+      const patchedParts = applyDesignPresetPatchToParts(baseParts, preset.patch);
+      const previewHtml = buildChartHtml(patchedParts);
+      thumbnailDataUrl = await generateChartThumbnailFromHtml(previewHtml);
+    } catch {
+      thumbnailDataUrl = "";
+    }
+    designPresets.push({
+      id: preset.id,
+      label: preset.label,
+      patch: preset.patch,
+      thumbnailDataUrl,
+    });
+  }
+
+  return designPresets;
 }
 
 async function runIntentAndRecommendation({ prompt, sourceData, imageBase64 }) {
@@ -495,7 +536,9 @@ async function handlePromptSubmit(payload) {
       });
     }
 
-    recommendationResults.forEach((result, index) => {
+    for (let index = 0; index < recommendationResults.length; index += 1) {
+      const result = recommendationResults[index];
+      const basePartsForPreset = safeDeepClone(nextParts, createEmptyChartParts());
       const recommendationPanelPlan = buildRecommendationPanelPlan({
         recommendationJson: result?.recommendationJson || {},
         panelJson: result?.panelJson || {},
@@ -512,13 +555,18 @@ async function handlePromptSubmit(payload) {
         panelJson: result?.panelJson || {},
         index,
       });
+      const designPresets = await buildDesignPresetThumbnails({
+        recommendationJson: result?.recommendationJson || {},
+        baseParts: basePartsForPreset,
+      });
 
       appendedPanelGroups.push({
         id: `intent_group_${Date.now()}_${panelGroupSeed++}`,
         label: groupLabel,
         panelSpec: groupState.panelSpec,
+        designPresets,
       });
-    });
+    }
 
     const mergedPanelGroups = previousPanelGroups.concat(appendedPanelGroups);
 
@@ -572,7 +620,7 @@ async function handleImageUploaded(payload) {
   }
 
   if (runtimeModeConfig.isDevelopment) {
-    // 开发模式下也强制触发一次预览重渲染，避免同一 preset 时不触发 iframe load。
+    // Development mode also remounts preview once to ensure iframe load is triggered.
     isPreviewVisible.value = false;
     previewPlaceholderText.value = "Rebuilding chart...";
     await nextTick();
@@ -769,3 +817,4 @@ async function handleImageUploaded(payload) {
   }
 }
 </style>
+
